@@ -87,7 +87,7 @@ catalog.forEach(([name, , minimum], index) => {
 });
 select.value = defaults.belt;
 
-const tables = document.querySelector('#catalogs');
+const tables = document.querySelector('#catalog-tables');
 for (const {label, columns, rows} of referenceTables) {
   const group = document.createElement('details');
   const title = document.createElement('summary');
@@ -118,14 +118,90 @@ for (const {label, columns, rows} of referenceTables) {
   tables.append(group);
 }
 
+const stageInput=document.querySelector('#edit-stage');
+const memoryStage=document.querySelector('#memory-stage');
+const overview=document.querySelector('#overview');
 let current;
+let edited=false;
+let activeStage='etapa-1';
+
+function selectEditor(id) {
+  stageInput.value=id;
+  for(const fieldset of form.querySelectorAll('fieldset')) fieldset.hidden=fieldset.id!==id;
+}
+
+function showMemoryStep(id) {
+  if (!memory.querySelector('#'+id)) id=memoryStage.options[0]?.value;
+  activeStage=id||'etapa-1';
+  memoryStage.value=activeStage;
+  for(const section of memory.children) section.hidden=section.id!==activeStage;
+}
+
+function showView(){
+  const hash=location.hash.slice(1);
+  const stage=/^etapa-[1-8]$/.test(hash);
+  const view=stage?'memoria':(['datos','memoria','catalogos'].includes(hash)?hash:'resultados');
+  for(const panel of document.querySelectorAll('.view')) panel.hidden=panel.id!==view;
+  for(const link of document.querySelectorAll('.views [data-view]')){
+    if(link.dataset.view===view) link.setAttribute('aria-current','page');
+    else link.removeAttribute('aria-current');
+  }
+  showMemoryStep(stage?hash:activeStage);
+}
+
+stageInput.addEventListener('change',()=>selectEditor(stageInput.value));
+memoryStage.addEventListener('change',()=>{location.hash=memoryStage.value;});
+window.addEventListener('hashchange',showView);
+
+function renderOverview(result) {
+  overview.replaceChildren();
+  if(result.error){
+    const notice=document.createElement('p');
+    notice.className='note';
+    notice.textContent=result.error;
+    overview.append(notice);
+    return;
+  }
+  const {power,belt,design,spring}=result;
+  const values=[
+    ['Potencia requerida',number(power.motorPower/1000,2)+' kW',number(power.outRpm)+' rpm a la salida',1],
+    ['Ancho de banda',number(1000*belt.selected)+' mm','Rodillo de '+number(belt.rollerDiameter)+' mm',2],
+    ['Engranes',number(design.faceMm)+' mm de cara','Módulo '+number(design.module)+' mm',3],
+    ['Flecha',number(design.diameter)+' mm','Diámetro comercial',5],
+    ['Rodamientos',number(design.diameter)+' mm de agujero','Reacciones máximas: '+design.loads.map(load=>number(load/1000,2)).join(' y ')+' kN',6],
+    ['Resorte',number(spring.selected)+' mm de alambre',number(spring.fmin,1)+' a '+number(spring.fmax,1)+' N',7]
+  ];
+  const grid=document.createElement('div');
+  grid.className='grid';
+  for(const [label,value,detail,stage] of values){
+    const card=document.createElement('article');
+    card.className='card';
+    const title=document.createElement('h3');
+    title.textContent=label;
+    const reading=document.createElement('strong');
+    reading.textContent=value;
+    const caption=document.createElement('p');
+    caption.textContent=detail;
+    const link=document.createElement('a');
+    link.href='#etapa-'+stage;
+    link.textContent='Ver cálculo';
+    link.setAttribute('aria-label','Ver cálculo de '+label.toLowerCase());
+    card.append(title,reading,caption,link);
+    grid.append(card);
+  }
+  const note=document.createElement('p');
+  note.className='note';
+  note.textContent='Por verificar: fatiga del resorte y condiciones de trabajo de la banda.';
+  const diagrams=document.createElement('a');
+  diagrams.href='#etapa-8';
+  diagrams.className='button secondary';
+  diagrams.textContent='Ver diagramas';
+  overview.append(grid,note,diagrams);
+}
 
 function render(entries) {
   memory.replaceChildren();
-  const nav = document.createElement('nav');
-  nav.className = 'memory-nav';
-  nav.setAttribute('aria-label','Etapas de la memoria');
-  memory.append(nav);
+  memoryStage.replaceChildren();
   let index = 0;
   let section = memory;
   let target = memory;
@@ -133,10 +209,7 @@ function render(entries) {
     if (type === 'section') {
       section = document.createElement('section');
       section.id = 'etapa-' + (++index);
-      const link = document.createElement('a');
-      link.href = '#' + section.id;
-      link.textContent = value;
-      nav.append(link);
+      memoryStage.add(new Option(value,section.id));
       memory.append(section);
       target = section;
     } else if (type === 'heading') {
@@ -217,25 +290,40 @@ function tex(entries) {
 }
 
 function run() {
-  const values = Object.fromEntries(new FormData(form));
-  current = calculate(Object.fromEntries(Object.entries(values).map(([key,value]) => [key, Number(value)])));
+  const invalid=Array.from(form.elements).find(input=>input.willValidate&&!input.validity.valid);
+  if(invalid){
+    selectEditor(invalid.closest('fieldset').id);
+    location.hash='datos';
+    showView();
+    invalid.focus();
+    invalid.reportValidity();
+    return false;
+  }
+  const values=Object.fromEntries(new FormData(form));
+  current=calculate(Object.fromEntries(Object.entries(values).map(([key,value])=>[key,Number(value)])));
+  edited=false;
   render(current.entries);
-  calculationStatus.textContent = current.error
-    ? 'Propuesta incompleta. Revisa la anotación en la memoria.'
-    : 'Siete etapas calculadas · revisa las verificaciones pendientes.';
-  download.disabled = !current.spring;
+  renderOverview(current);
+  showView();
+  calculationStatus.textContent=current.error?current.error:'Caso calculado · siete etapas';
+  calculationStatus.dataset.state=current.error?'error':'ready';
+  download.disabled=!current.spring;
+  return !current.error;
 }
-form.addEventListener('submit', event => {
+form.addEventListener('submit',event=>{
   event.preventDefault();
-  run();
+  if(run()) location.hash='resultados';
 });
-form.addEventListener('input', () => {
-  download.disabled = true;
-  calculationStatus.textContent = 'Propuesta editada. Pulsa Calcular para actualizar la memoria.';
+form.addEventListener('input',event=>{
+  if(!event.target.name||edited) return;
+  edited=true;
+  download.disabled=true;
+  calculationStatus.dataset.state='edited';
+  calculationStatus.textContent='Hay cambios sin calcular. Pulsa Calcular para actualizar los resultados.';
 });
-document.querySelector('#restore').addEventListener('click', () => {
-  for (const [key, value] of Object.entries(defaults)) form.elements.namedItem(key).value = value;
-  run();
+document.querySelector('#restore').addEventListener('click',()=>{
+  for(const [key,value] of Object.entries(defaults)) form.elements.namedItem(key).value=value;
+  if(run()) location.hash='resultados';
 });
 download.addEventListener('click', () => {
   const url = URL.createObjectURL(new Blob([tex(current.entries)], {type:'application/x-tex;charset=utf-8'}));

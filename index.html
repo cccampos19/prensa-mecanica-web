@@ -5,27 +5,63 @@
 <title>Prensa mecánica · Memoria de cálculo</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
-<style>
-*{box-sizing:border-box}body{margin:0;background:#edf0eb;color:#1d2925;font:16px system-ui,sans-serif}header{background:#183b35;color:white;padding:34px max(5vw,16px)}h1{font:clamp(32px,6vw,60px) Georgia,serif;margin:0}header p{margin:8px 0 0;color:#d3e5db}main{max-width:1330px;margin:auto;padding:24px;display:grid;grid-template-columns:minmax(255px,310px) minmax(0,1fr);gap:24px;align-items:start}form,article{background:#fffefa;border:1px solid #cad3cc;border-radius:9px;padding:clamp(16px,3vw,34px)}h2,h3{font-family:Georgia,serif}h2{margin-top:0}article section+section{border-top:2px solid #bccfc4;margin-top:34px;padding-top:28px}h3{margin-top:24px;color:#21594c}fieldset{border:0;padding:0;margin:0 0 18px}legend{font-weight:700;margin-bottom:8px}label{display:block;font-size:.85rem;margin:8px 0}input,select,button{font:inherit;width:100%;padding:7px 8px;border:1px solid #a9b9b0;border-radius:5px;margin-top:3px;background:white;color:inherit}button{cursor:pointer;background:#21594c;color:white;font-weight:650;padding:10px}button.secondary{background:white;color:#21594c}button:disabled{opacity:.48;cursor:default}.eq{overflow-x:auto;padding:8px 10px;background:#f1f5ee;margin:6px 0;border-left:2px solid #86ab98;white-space:pre-wrap;overflow-wrap:anywhere}.eq .katex-display{margin:0;text-align:left}.eq .katex-display>.katex{text-align:left}.note{padding:11px 14px;background:#fff2d5;color:#543b18}.iteration{margin:16px 0;padding:0 12px 8px;border:1px solid #d5dfd6;border-radius:6px}#status{font-size:.85rem}#status:empty{display:none}.table-wrap{overflow:auto;margin-top:8px}table{border-collapse:collapse;font-size:.86rem;width:100%}td,th{padding:7px 9px;text-align:left;border-bottom:1px solid #d5dfd6;white-space:nowrap}thead{background:#eef4ee}.design-diagram{margin:18px 0;padding:10px 16px 14px;border:1px solid #cad3cc;border-radius:8px}.design-diagram canvas{width:100%;height:auto;max-width:680px;display:block;margin:0 auto}.design-diagram figcaption{font-size:.9rem}.settings{border-top:1px solid #d5dfd6;padding-top:10px}.memory-nav{display:flex;gap:8px 14px;flex-wrap:wrap;border-bottom:1px solid #d5dfd6;padding-bottom:18px;margin-bottom:22px}.memory-nav a{color:#21594c;font-size:.9rem}details{margin:12px 0}summary{cursor:pointer;font-weight:650;color:#21594c}@media(max-width:760px){main{grid-template-columns:1fr;padding:12px;gap:12px}}
-</style>
-<header><h1>Prensa mecánica</h1><p>Memoria de cálculo · Transmisión de la prensa</p></header>
-<main>
-<form id="inputs">
-<h2>Datos y propuestas</h2>
-<fieldset id="powerFields"><legend>Potencia y velocidades</legend></fieldset>
-<fieldset id="beltFields"><legend>Poleas y banda</legend><label>Material · tabla 17-2<select name="belt"></select></label></fieldset>
-<details class="settings"><summary>Engranes</summary><fieldset id="gearFields" aria-label="Engranes"></fieldset></details>
-<details class="settings"><summary>Equilibrio de la flecha</summary><fieldset id="balanceFields" aria-label="Equilibrio de la flecha"></fieldset></details>
-<details class="settings"><summary>Dimensionamiento de la flecha</summary><fieldset id="shaftFields" aria-label="Dimensionamiento de la flecha"></fieldset></details>
-<details class="settings"><summary>Rodamientos</summary><fieldset id="bearingFields" aria-label="Rodamientos"></fieldset></details>
-<details class="settings"><summary>Brazo tensor y resorte</summary><fieldset id="springFields" aria-label="Brazo tensor y resorte"></fieldset></details>
-<button type="submit">Calcular</button>
-<button class="secondary" type="button" id="restore">Restaurar datos de la tarea</button>
-<details><summary>Consultar catálogos</summary><p>Tablas transcritas de clase. Usa los selectores de cada etapa para aplicar las propiedades de catálogo.</p><div id="catalogs"></div></details>
-<button type="button" id="download" disabled>Descargar memoria .tex</button>
+<link rel="stylesheet" href="interfaz.css?v=7">
+<header class="top">
+  <div class="wrap top-content">
+    <div><p class="project-name">Diseño de elementos de máquinas</p><h1>Prensa mecánica</h1></div>
+    <button type="button" id="download" disabled>Descargar .tex</button>
+  </div>
+</header>
+<main class="wrap">
+<nav class="views" aria-label="Vistas del proyecto">
+  <a href="#resultados" data-view="resultados">Resultados</a>
+  <a href="#datos" data-view="datos">Editar datos</a>
+  <a href="#memoria" data-view="memoria">Memoria y diagramas</a>
+  <a href="#catalogos" data-view="catalogos">Catálogos</a>
+</nav>
 <p id="status" role="status"></p>
-</form>
-<article id="memory" aria-label="Memoria de cálculo"></article>
+<section id="resultados" class="view">
+  <div class="section-title"><h2>Resultados del cálculo</h2><a class="button secondary" href="#datos" data-view="datos">Editar datos</a></div>
+  <div id="overview"></div>
+</section>
+<section id="datos" class="view" hidden>
+  <h2>Editar datos</h2>
+  <form id="inputs" novalidate>
+    <div class="editor">
+      <label for="edit-stage" class="picker">Etapa a editar
+        <select id="edit-stage">
+          <option value="powerFields">Potencia y velocidades</option>
+          <option value="beltFields">Poleas y banda</option>
+          <option value="gearFields">Engranes</option>
+          <option value="balanceFields">Equilibrio de la flecha</option>
+          <option value="shaftFields">Dimensionamiento de la flecha</option>
+          <option value="bearingFields">Rodamientos</option>
+          <option value="springFields">Brazo tensor y resorte</option>
+        </select>
+      </label>
+      <fieldset id="powerFields"><legend>Potencia y velocidades</legend></fieldset>
+      <fieldset id="beltFields" hidden><legend>Poleas y banda</legend><label>Material · tabla 17-2<select name="belt"></select></label></fieldset>
+      <fieldset id="gearFields" hidden><legend>Engranes</legend></fieldset>
+      <fieldset id="balanceFields" hidden><legend>Equilibrio de la flecha</legend></fieldset>
+      <fieldset id="shaftFields" hidden><legend>Dimensionamiento de la flecha</legend></fieldset>
+      <fieldset id="bearingFields" hidden><legend>Rodamientos</legend></fieldset>
+      <fieldset id="springFields" hidden><legend>Brazo tensor y resorte</legend></fieldset>
+    </div>
+    <div class="actions">
+      <button type="submit">Calcular</button>
+      <button class="secondary" type="button" id="restore">Restaurar datos de la tarea</button>
+    </div>
+  </form>
+</section>
+<section id="memoria" class="view" hidden>
+  <h2>Memoria y diagramas</h2>
+  <label for="memory-stage" class="picker">Etapa de la memoria<select id="memory-stage"></select></label>
+  <article id="memory" aria-label="Memoria de cálculo"></article>
+</section>
+<section id="catalogos" class="view" hidden>
+  <h2>Catálogos</h2>
+  <div id="catalog-tables"></div>
+</section>
 </main>
 <script src="catalogos.js"></script>
 <script src="tensor.js?v=6"></script>
@@ -33,5 +69,5 @@
 <script src="transmision.js?v=6"></script>
 <script src="resorte.js?v=6"></script>
 <script src="diagramas.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </html>
