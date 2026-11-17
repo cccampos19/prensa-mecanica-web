@@ -4,6 +4,9 @@ const form = document.querySelector('#inputs');
 const memory = document.querySelector('#memory');
 const calculationStatus = document.querySelector('#status');
 const download = document.querySelector('#download');
+const downloadPdf=document.querySelector('#download-pdf');
+const pdfStatus=document.querySelector('#pdf-status');
+let generatingPdf=false;
 const defaults = {
   rpm: 2100, ratio: 1.875, load: 18000, pinion: 160, gear: 640,
   gearEff: 97, beltEff: 94, nominal: 75, pulley: 300, centers: 0.90,
@@ -307,7 +310,8 @@ function run() {
   showView();
   calculationStatus.textContent=current.error?current.error:'Caso calculado · siete etapas';
   calculationStatus.dataset.state=current.error?'error':'ready';
-  download.disabled=!current.spring;
+  updateDownloads();
+  if(!generatingPdf) pdfStatus.textContent='';
   return !current.error;
 }
 form.addEventListener('submit',event=>{
@@ -317,7 +321,8 @@ form.addEventListener('submit',event=>{
 form.addEventListener('input',event=>{
   if(!event.target.name||edited) return;
   edited=true;
-  download.disabled=true;
+  updateDownloads();
+  if(!generatingPdf) pdfStatus.textContent='';
   calculationStatus.dataset.state='edited';
   calculationStatus.textContent='Hay cambios sin calcular. Pulsa Calcular para actualizar los resultados.';
 });
@@ -325,12 +330,44 @@ document.querySelector('#restore').addEventListener('click',()=>{
   for(const [key,value] of Object.entries(defaults)) form.elements.namedItem(key).value=value;
   if(run()) location.hash='resultados';
 });
-download.addEventListener('click', () => {
-  const url = URL.createObjectURL(new Blob([tex(current.entries)], {type:'application/x-tex;charset=utf-8'}));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'memoria_prensa.tex';
+function updateDownloads(){
+  const available=Boolean(current?.spring)&&!edited;
+  download.disabled=!available;
+  downloadPdf.disabled=!available||generatingPdf;
+}
+
+function saveDocument(blob,name){
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;
+  link.download=name;
   link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+}
+
+download.addEventListener('click',()=>{
+  saveDocument(new Blob([tex(current.entries)],{type:'application/x-tex;charset=utf-8'}),'memoria_prensa.tex');
 });
-window.addEventListener('DOMContentLoaded', run);
+downloadPdf.addEventListener('click',async()=>{
+  const snapshot=current;
+  generatingPdf=true;
+  updateDownloads();
+  pdfStatus.textContent='Preparando el PDF…';
+  try{
+    const document=await buildMemoryPdf(snapshot.entries,formatEquation,(completed,total)=>{
+      pdfStatus.textContent='Generando PDF… '+Math.floor(100*completed/total)+' %';
+    });
+    if(snapshot!==current||edited){
+      pdfStatus.textContent='Los datos cambiaron. Genera el PDF de la corrida actual.';
+      return;
+    }
+    saveDocument(document,'memoria_prensa.pdf');
+    pdfStatus.textContent='PDF listo.';
+  }catch(error){
+    pdfStatus.textContent=error.message||'No se pudo generar el PDF.';
+  }finally{
+    generatingPdf=false;
+    updateDownloads();
+  }
+});
+window.addEventListener('DOMContentLoaded',run);

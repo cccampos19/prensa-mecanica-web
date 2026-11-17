@@ -5,11 +5,15 @@
 <title>Prensa mecánica · Memoria de cálculo</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
-<link rel="stylesheet" href="interfaz.css?v=7">
+<link rel="stylesheet" href="interfaz.css?v=8">
 <header class="top">
   <div class="wrap top-content">
     <div><p class="project-name">Diseño de elementos de máquinas</p><h1>Prensa mecánica</h1></div>
-    <button type="button" id="download" disabled>Descargar .tex</button>
+    <div class="downloads">
+      <button type="button" id="download-pdf" disabled>Descargar PDF</button>
+      <button type="button" id="download" disabled>Descargar .tex</button>
+      <span id="pdf-status" role="status"></span>
+    </div>
   </div>
 </header>
 <main class="wrap">
@@ -69,5 +73,6 @@
 <script src="transmision.js?v=6"></script>
 <script src="resorte.js?v=6"></script>
 <script src="diagramas.js?v=6"></script>
-<script src="app.js?v=7"></script>
+<script src="memoria-pdf.js?v=8"></script>
+<script src="app.js?v=8"></script>
 </html>
