@@ -13,7 +13,7 @@ const defaults = {
   start: 200, angle: 60, belt: 9,
   np:20, ng:80, phi:20, yp:.322, yg:.426, ktGear:1.8, gearFat:2, gearStatic:4,
   gearSteel:17, gearFinish:1, x2:120, x3:320, span:620,
-  shaftSteel:17, shaftFinish:1, shaftStart:40, fillet:.1, kc:.59, ktFlex:1.7,
+  shaftSteel:-1, shaftFinish:1, shaftStart:40, fillet:.1, kc:.59, ktFlex:1.7,
   ktTors:1.4, shaftFat:2, shaftStatic:2, temperature:20, reliability:99,
   bearingType:0, life:20000, bearingStatic:1.5,
   wire:0, travel:20, idlerRadius:56, armAngle:-14, springRate:5.5, preload:35, springIndex:10, springSafety:2, hookRadius:2
@@ -76,10 +76,13 @@ function addSelect(group, name, title, labels, values=labels.map((_,i)=>i)) {
   label.append(select);
   document.getElementById(group).prepend(label);
 }
-for (const [group, prefix] of [['gearFields','gear'],['shaftFields','shaft']]) {
-  addSelect(group,prefix+'Finish','Acabado',finishes.map(row=>row[0]));
-  addSelect(group,prefix+'Steel','Acero',steels.map(steel=>steel.label));
-}
+const steelLabels=steels.map(steel=>steel.label);
+addSelect('gearFields','gearFinish','Acabado',finishes.map(row=>row[0]));
+addSelect('gearFields','gearSteel','Acero',steelLabels);
+addSelect('shaftFields','shaftFinish','Acabado',finishes.map(row=>row[0]));
+addSelect('shaftFields','shaftSteel','Acero inicial de la flecha',
+  ['Selección automática · tablas A-20/A-21',...steelLabels],
+  [-1,...steels.map((_,i)=>i)]);
 addSelect('shaftFields','kc','Factor de carga · tabla de clase',shaftLoadFactors.map(item=>item.label),shaftLoadFactors.map(item=>item.value));
 addSelect('bearingFields','bearingType','Tipo · serie 02',['Ranura profunda','Contacto angular']);
 
@@ -190,7 +193,7 @@ function metric(value,unit,digits=2){
   return Number.isFinite(value)?number(value,digits)+(unit?' '+unit:''):'—';
 }
 
-function stageFacts(result,stage){
+function stageFacts(result,stage,includeSelection){
   const {power,belt,design,spring}=result;
   const minimum=values=>values?.length?Math.min(...values):undefined;
   switch(stage){
@@ -215,9 +218,11 @@ function stageFacts(result,stage){
       ['Momento flector máximo',metric(Math.max(...design.moments),'N·m')]
     ];
     case 5: return design&&[
+      ...(includeSelection?[['Acero seleccionado',steels[design.shaftSteelIndex]?.label||'—']]:[]),
       ['Diámetro comercial',metric(design.diameter,'mm',0)],
       ['Diámetro continuo',metric(design.continuous,'mm')],
-      ['Índice mínimo de Hencky–Marin',metric(minimum(design.shaftFatigue),'')]
+      ['Índice mínimo de Hencky–Marin',metric(minimum(design.shaftFatigue),'')],
+      ['Factor mínimo estático',metric(minimum(design.shaftStatic),'')]
     ];
     case 6: return design&&[
       ['Diámetro de agujero',metric(design.diameter,'mm',0)],
@@ -249,7 +254,7 @@ function stageCaution(result,stage){
 function renderStageResult() {
   stageResult.replaceChildren();
   if(!current||activeStage===8) return;
-  const facts=stageFacts(current,activeStage);
+  const facts=stageFacts(current,activeStage,!edited);
   if(!facts) return;
   if(edited){
     const stale=document.createElement('p');
@@ -270,6 +275,14 @@ function renderStageResult() {
     list.append(item);
   }
   stageResult.append(list);
+  if(activeStage===5&&!edited&&current.design.shaftTrials?.length){
+    const attempts=document.createElement('p');
+    const initial=formValues().shaftSteel;
+    const start=initial===-1?'Selección automática. ':'Acero inicial: '+steels[initial].label+'. ';
+    const count=current.design.shaftTrials.length;
+    attempts.textContent=start+(count===1?'Una combinación evaluada. ':count+' combinaciones evaluadas. ')+'Consulta el orden y los resultados en Desarrollo del cálculo.';
+    stageResult.append(attempts);
+  }
   const caution=stageCaution(current,activeStage);
   if(caution){
     const item=document.createElement('p');
@@ -334,7 +347,7 @@ function renderOverview(result) {
     ['Ancho de banda',number(1000*belt.selected)+' mm','Rodillo de '+number(belt.rollerDiameter)+' mm',2],
     ['Engranes',number(design.faceMm)+' mm de cara','Módulo '+number(design.module)+' mm',3],
     ['Equilibrio de la flecha',metric(Math.max(...design.moments),'N·m'),'Momento flector máximo',4],
-    ['Flecha',number(design.diameter)+' mm','Diámetro comercial',5],
+    ['Flecha',number(design.diameter)+' mm',edited?'Selección pendiente de recálculo':steels[design.shaftSteelIndex]?.label||'Diámetro comercial',5],
     ['Rodamientos',number(design.diameter)+' mm de agujero','Vida mínima L10: '+metric(Math.min(...design.bearingLife),'h',0),6],
     ['Resorte',number(spring.selected)+' mm de alambre',number(spring.fmin,1)+' a '+number(spring.fmax,1)+' N',7]
   ];
@@ -486,6 +499,7 @@ form.addEventListener('input',event=>{
   renderStageMaterial();
   if(!firstEdit) return;
   renderStageResult();
+  if(current) renderOverview(current);
   updateDownloads();
   if(!generatingPdf) pdfStatus.textContent='';
   calculationStatus.dataset.state='edited';

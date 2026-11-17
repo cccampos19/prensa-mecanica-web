@@ -5,7 +5,7 @@ const steels = [referenceTables[1], referenceTables[2]].flatMap(({rows}, table) 
     const [aisi, process] = row;
     const i = table ? 3 : 2;
     const label = 'AISI ' + aisi + ' ' + process + (table ? ' · ' + row[2] + ' °C' : '');
-    return {label, sut:row[i], sy:row[i+2], table:table ? 'A-21' : 'A-20'};
+    return {label, grade:Number(aisi), process, sut:row[i], sy:row[i+2], table:table ? 'A-21' : 'A-20'};
   }));
 const finishes = referenceTables[5].rows;
 const shaftLoadFactors = [
@@ -75,17 +75,27 @@ function finishDesign(c, power, belt, entries, check) {
     return kf;
   }
 
-  function iterate(start, label, step) {
+  function iterate(start, label, step, allowFailure = false) {
     let current = start;
     for (let k=1;k<=100;k++) {
       add('iteration', 'Iteración ' + k + ' · ' + label);
       const next = step(current);
       const error = 100*Math.abs(next-current)/next;
-      check(Number.isFinite(error), 'La iteración produjo un valor inválido.');
+      if(!Number.isFinite(error)){
+        if(allowFailure){
+          text('La iteración sale del intervalo de tamaño del modelo.');
+          return null;
+        }
+        check(false,'La iteración produjo un valor inválido.');
+      }
       eq(math`\varepsilon=\frac{|${n(next,6)}-${n(current,6)}|}{${n(next,6)}}100=${n(error,5)}\,\%`);
       text(error < tolerance ? 'Converge con error menor al 3 %.' : 'Se usa el resultado en la siguiente iteración.');
       if (error<tolerance) return next;
       current=next;
+    }
+    if(allowFailure){
+      text('La iteración no convergió en 100 pasos.');
+      return null;
     }
     check(false, 'La iteración de ' + label + ' no convergió en 100 pasos.');
   }
@@ -213,12 +223,11 @@ function finishDesign(c, power, belt, entries, check) {
   text('Apuntes, pp. 9–22. Flexión alternante, torsión media y criterio elíptico de Hencky–Marin. La libreta usa el inverso de la suma de cuadrados como índice; su raíz cuadrada es el multiplicador de carga sobre la misma trayectoria. El entalle se aplica una vez al esfuerzo.');
   check(shaftLoadFactors.some(({value})=>value===c.kc),'Selecciona un factor de carga de la tabla.');
   check(c.shaftStart>0&&c.fillet>0&&c.ktFlex>=1&&c.ktTors>=1&&c.shaftFat>=1&&c.shaftStatic>=1,'Revisa el diámetro inicial, filete, factores y seguridades de flecha.');
-  const shaft=useSteel(c.shaftSteel,c.shaftFinish);
+  check(c.shaftSteel===-1||steels[c.shaftSteel],'Selecciona un acero de partida o la búsqueda automática.');
   text('Las figuras 6-20 y 6-21 indican usar la ordenada de r = 0.16 in para radios mayores.');
   text('El factor k_c se aplica como hipótesis de tipo de carga. Los valores tabulados son 1 para flexión, 0.85 para carga axial y 0.59 para torsión. Usar 0.59 para el término de flexión es una elección conservadora del modelo.');
-  eq(math`S'_e=0.5(${n(shaft.sut)})=${stress(.5*shaft.sut)};\quad k_c=${n(c.kc)};\quad k_d=${n(kd)};\quad k_e=${n(ke)}`);
   const sectionRatios=[1,1.2];
-  function shaftSection(base,i,show){
+  function shaftSection(shaft,base,i,show){
     const d=sectionRatios[i]*base;
     const r=c.fillet*d, M=moments[i]*1000, T=power.shaftTorque*1000;
     if(show) eq(math`d_{${i+2}}=${n(sectionRatios[i])}(${n(base,5)})=${mm(d)};\quad r=${n(c.fillet)}(${n(d,5)})=${mm(r)}`);
@@ -234,68 +243,117 @@ function finishDesign(c, power, belt, entries, check) {
     const nf=1/((a/se)**2+(m/shaft.sut)**2), ns=shaft.sy/Math.hypot(a,m);
     return {d,M,T,se,kf,kfs,a,m,nf,ns};
   }
-  const continuous=iterate(c.shaftStart,'diámetro base (mm)',base=>{
-    const needs=sectionRatios.map((ratio,i)=>{
-      const {M,T,se,kf,kfs}=shaftSection(base,i,true);
-      const local=Math.cbrt(32*Math.sqrt(c.shaftFat)/Math.PI*Math.hypot(kf*M/se,Math.sqrt(.75)*kfs*T/shaft.sut));
-      eq(math`d_{req}=\left[\frac{32\sqrt n}{\pi}\sqrt{(K_fM/S_e)^2+\tfrac34(K_{fs}T/S_{ut})^2}\right]^{1/3}`);
-      eq(math`d_{req}=\left[\frac{32\sqrt{${n(c.shaftFat)}}}{\pi}\sqrt{\left(\frac{${n(kf,5)}\cdot ${n(M)}}{${n(se)}}\right)^2+\tfrac34\left(\frac{${n(kfs,5)}\cdot ${n(T)}}{${n(shaft.sut)}}\right)^2}\right]^{1/3}`);
-      eq(math`d_{req}=${mm(local)};\quad d_{\mathrm{base,req}}=\frac{${n(local,5)}}{${n(ratio)}}=${mm(local/ratio)}`);
-      return local/ratio;
-    });
-    const next=Math.max(...needs);
-    eq(math`d_{\mathrm{nuevo}}=\max(${needs.map(v=>n(v,5)).join(',')})=${mm(next)}`);
-    return next;
+  check(c.shaftStart>=2.79&&1.2*c.shaftStart<=254,'El diámetro inicial debe quedar en el intervalo de la tabla de tamaño.');
+  function solveDiameter(shaft){
+    return iterate(c.shaftStart,'diámetro base (mm)',base=>{
+      if(base<2.79||base*1.2>254) return NaN;
+      const needs=sectionRatios.map((ratio,i)=>{
+        const {M,T,se,kf,kfs}=shaftSection(shaft,base,i,true);
+        const local=Math.cbrt(32*Math.sqrt(c.shaftFat)/Math.PI*Math.hypot(kf*M/se,Math.sqrt(.75)*kfs*T/shaft.sut));
+        eq(math`d_{req}=\left[\frac{32\sqrt n}{\pi}\sqrt{(K_fM/S_e)^2+\tfrac34(K_{fs}T/S_{ut})^2}\right]^{1/3}`);
+        eq(math`d_{req}=\left[\frac{32\sqrt{${n(c.shaftFat)}}}{\pi}\sqrt{\left(\frac{${n(kf,5)}\cdot ${n(M)}}{${n(se)}}\right)^2+\tfrac34\left(\frac{${n(kfs,5)}\cdot ${n(T)}}{${n(shaft.sut)}}\right)^2}\right]^{1/3}`);
+        eq(math`d_{req}=${mm(local)};\quad d_{\mathrm{base,req}}=\frac{${n(local,5)}}{${n(ratio)}}=${mm(local/ratio)}`);
+        return local/ratio;
+      });
+      const next=Math.max(...needs);
+      eq(math`d_{\mathrm{nuevo}}=\max(${needs.map(v=>n(v,5)).join(',')})=${mm(next)}`);
+      return next;
+    },true);
+  }
+
+  check(c.life>0&&c.bearingStatic>=1&&[0,1].includes(c.bearingType),'Revisa la vida, serie y seguridad estática de rodamientos.');
+  const bearingType=c.bearingType===0?'Ranura profunda':'Contacto angular';
+  const life=60*power.shaftRpm*c.life/1e6;
+  const requirements=loads.map(load=>[load*Math.cbrt(life)/1000,c.bearingStatic*load/1000]);
+  const column=c.bearingType===0?6:8;
+  const bearingOptions=referenceTables[3].rows.map(row=>{
+    const [d,,,rmax,shoulder]=row;
+    const [C10,C0]=row.slice(column,column+2);
+    const passes=requirements.map(([dynamic,staticLoad])=>[C10>=dynamic,C0>=staticLoad]);
+    const shoulders=1.2*d>=shoulder&&1.5*d>=shoulder;
+    const spacer=c.fillet*d<=rmax||rmax>=1;
+    return {row,passes,shoulders,spacer,fit:shoulders&&spacer&&passes.every(pair=>pair.every(Boolean))};
   });
+
+  heading('Selección iterativa del acero de la flecha');
+  text('En el menor diámetro compatible con rodamientos y montaje se prueba la fila preferida, si se indicó, y luego las demás. Si ninguna cumple, se prueba el siguiente diámetro compatible.');
+  text('Orden automático: primero aceros normalizados de A-21 próximos al grado 1045, con preferencia por el grado menor en caso de empate; después las demás filas en orden de tabla. Sut y Sy se toman directamente de cada fila.');
+  eq(math`n_{f,\min}=${n(c.shaftFat)};\quad n_{est,\min}=${n(c.shaftStatic)}`);
+  const order=steels.map((_,i)=>i);
+  const normalized=index=>steels[index].table==='A-21'&&steels[index].process==='Normalizado';
+  order.sort((a,b)=>Number(normalized(b))-Number(normalized(a))||
+    (normalized(a)&&normalized(b)?Math.abs(steels[a].grade-1045)-Math.abs(steels[b].grade-1045)||steels[a].grade-steels[b].grade:0)||a-b);
+  if(c.shaftSteel>=0) order.splice(0,0,...order.splice(order.indexOf(c.shaftSteel),1));
+  const sizingBySteel=new Map();
+  const fitOptions=bearingOptions.filter(option=>option.fit);
+  check(fitOptions.length>0,'La tabla 11-2 no ofrece rodamientos compatibles con las cargas, la vida y el montaje.');
+  const shaftTrials=[];
+  let selectedTrial, chosen;
+  for(const {row} of fitOptions){
+    const d=row[0];
+    for(const index of order){
+      if(!sizingBySteel.has(index)){
+        heading('Diámetro continuo · '+steels[index].label);
+        const steel=useSteel(index,c.shaftFinish);
+        eq(math`S'_e=0.5(${n(steel.sut)})=${stress(.5*steel.sut)};\quad k_c=${n(c.kc)};\quad k_d=${n(kd)};\quad k_e=${n(ke)}`);
+        sizingBySteel.set(index,{steel,continuous:solveDiameter(steel)});
+      }
+      const {steel,continuous}=sizingBySteel.get(index);
+      const sections=sectionRatios.map((_,i)=>shaftSection(steel,d,i,false));
+      const fatigue=Math.min(...sections.map(value=>value.nf));
+      const staticSafety=Math.min(...sections.map(value=>value.ns));
+      const failures=[];
+      if(continuous===null) failures.push('diámetro continuo no converge en el intervalo de tamaño');
+      else if(d+1e-9<continuous) failures.push('diámetro menor al continuo');
+      if(fatigue<c.shaftFat) failures.push('índice de fatiga insuficiente');
+      if(staticSafety<c.shaftStatic) failures.push('seguridad estática insuficiente');
+      const accepted=failures.length===0;
+      const reason=accepted?'Cumple fatiga, estática y diámetro para la propuesta.':failures.join(', ')+'.';
+      shaftTrials.push({index,continuous,diameter:d,fatigue,static:staticSafety,reason,accepted});
+      add('iteration','Intento '+shaftTrials.length+' · '+steel.label+' · '+d+' mm');
+      eq(math`n_{f,2}=${n(sections[0].nf,4)};\quad n_{est,2}=${n(sections[0].ns,4)};\quad n_{f,3}=${n(sections[1].nf,4)};\quad n_{est,3}=${n(sections[1].ns,4)}`);
+      text(steel.table+'. Sut '+n(steel.sut)+' MPa, Sy '+n(steel.sy)+' MPa. Diámetro '+n(d)+' mm'
+        +(continuous===null?'':', mínimo continuo '+n(continuous,2)+' mm')+'. '+reason);
+      if(accepted){
+        selectedTrial={index,steel,continuous};
+        chosen=row;
+        break;
+      }
+    }
+    if(chosen) break;
+  }
+  check(chosen,'Ninguna fila de acero cumple fatiga y estática en los diámetros compatibles de la tabla 11-2.');
+  const {index:shaftSteelIndex,steel:shaft,continuous}=selectedTrial;
 
   const bearingStageStart=entries.length;
   section('Rodamientos y cierre');
   text('Apuntes, pp. 56–60, tablas 11-1 y 11-2. Engranes rectos y banda plana sin empuje axial externo: V = 1, X = 1, Y = 0. La vida L10 corresponde al 90 % de confiabilidad de rodamiento.');
-  check(c.life>0&&c.bearingStatic>=1&&[0,1].includes(c.bearingType),'Revisa la vida, serie y seguridad estática de rodamientos.');
-  const bearingType=c.bearingType===0?'Ranura profunda':'Contacto angular';
   text(bearingType+' · serie 02. Ambos apoyos usan el mismo diámetro base.');
-  const life=60*power.shaftRpm*c.life/1e6;
   eq(math`L_{10}=\frac{60(${n(power.shaftRpm)})(${n(c.life)})}{10^6}=${n(life)}\quad\text{millones de revoluciones}`);
-  const requirements=loads.map((load,i)=>{
-    const side=i===0?1:4;
-    const dynamic=load*Math.cbrt(life)/1000, staticLoad=c.bearingStatic*load/1000;
+  requirements.forEach(([dynamic,staticLoad],i)=>{
+    const load=loads[i], side=i===0?1:4;
     eq(math`P_{${side}}=XVF_r+YF_a=(1)(1)(${n(load)})+0=${force(load)}`);
     eq(math`C_{10,req,${side}}=P L_{10}^{1/3}=${n(load/1000,5)}(${n(life)})^{1/3}=${kip(dynamic)}`);
     eq(math`C_{0,req,${side}}=n_0 F_r=${n(c.bearingStatic)}(${n(load/1000,5)})=${kip(staticLoad)}`);
-    return [dynamic,staticLoad];
   });
-  let chosen;
-  const column=c.bearingType===0?6:8;
-  for(const row of referenceTables[3].rows){
-    const [d,,,rmax,shoulder]=row;
+
+  for(const option of bearingOptions){
+    const {row,passes,shoulders,spacer}=option;
+    const [d]=row;
     const [C10,C0]=row.slice(column,column+2);
     add('iteration','Candidato · '+d+' mm');
     eq(math`d=${mm(d)};\quad C_{10}=${kip(C10)};\quad C_0=${kip(C0)}`);
-    const results= requirements.map(([dynamic,staticLoad],i)=>{
-      const dynamicPass=C10>=dynamic, staticPass=C0>=staticLoad;
+    passes.forEach(([dynamicPass,staticPass],i)=>{
       text('Apoyo '+(i===0?1:4)+'. Dinámica '+(dynamicPass?'cumple':'insuficiente')+', estática '+(staticPass?'cumple':'insuficiente')+'.');
-      return dynamicPass&&staticPass;
     });
-    const diameter=d+1e-9>=continuous;
-    const geometry=1.2*d>=shoulder&&1.5*d>=shoulder;
-    text('Diámetro base mínimo '+(diameter?'cumple':'insuficiente')+'. Hombros '+(geometry?'compatibles':'insuficientes')+'.');
-    if(!diameter||!geometry||!results.every(Boolean)) continue;
-    const verifications=sectionRatios.map((_,i)=>shaftSection(d,i,false));
-    eq(math`n_{fat,2}=${n(verifications[0].nf,4)};\quad n_{est,2}=${n(verifications[0].ns,4)}`);
-    eq(math`n_{fat,3}=${n(verifications[1].nf,4)};\quad n_{est,3}=${n(verifications[1].ns,4)}`);
-    if(!verifications.every(v=>v.nf>=c.shaftFat&&v.ns>=c.shaftStatic)){
-      text('El diámetro comercial no alcanza las seguridades de la flecha.');
-      continue;
+    text('Hombros '+(shoulders?'compatibles':'insuficientes')+'. Espaciador '+(spacer?'compatible':'incompatible')+'.');
+    if(row===chosen){
+      text('Diámetro seleccionado en conjunto con '+shaft.label+'.');
+      break;
     }
-    if(c.fillet*d>rmax&&rmax<1){
-      text('El radio del borde propuesto del espaciador supera el máximo de catálogo.');
-      continue;
-    }
-    chosen=row;
-    break;
+    if(option.fit) text('Se descartó este diámetro durante la búsqueda de acero y diámetro de la etapa anterior.');
   }
   heading('Selección y verificación comercial');
-  check(chosen,'No hay un diámetro común compatible con las cargas, la flecha y el montaje en la tabla 11-2.');
   const [diameter,outer,bearingWidth,rmax,shoulder,housing]=chosen;
   const [C10,C0]=chosen.slice(column,column+2);
   eq(math`d_{base}=${mm(diameter)};\quad D=${mm(outer)};\quad B=${mm(bearingWidth)}`);
@@ -323,14 +381,14 @@ function finishDesign(c, power, belt, entries, check) {
   text('Tabla A-21, pp. 1005–1006: propiedades medias de probetas de 0.505 in (12.83 mm) mecanizadas de barras redondas de 1 in (25.4 mm). Los valores de temple y revenido proceden de una sola colada. Las filas no garantizan mínimos para la barra de esta flecha.');
   eq(math`d_{base}=${mm(stockReview.base)};\quad d_3=${mm(stockReview.section)};\quad d_{hombro}=${mm(stockReview.shoulder)}`);
   if(!stockReview.a20CoversFinishedSizes) {
-    note('Las tablas entregadas no respaldan elegir otro acero con resistencias garantizadas para estas dimensiones. Se conserva la fila seleccionada como referencia y la comprobación de fatiga es provisional.');
+    note('El acero elegido cumple el modelo con la fila tabulada. La comprobación es provisional porque estas tablas no garantizan resistencias mínimas para el tamaño de suministro de la flecha.');
   } else {
     note('Los tamaños acabados quedan dentro del intervalo dimensional de A-20. Se debe comprobar que el tamaño de suministro y la especificación ASTM correspondan a la fila usada. A-21 sigue aportando valores medios.');
   }
   text('Para cerrar la selección, solicita el certificado del lote con los mínimos de Sut y Sy para el grado, el estado de suministro o tratamiento y el diámetro real de partida. Si la flecha se mecaniza de una sola barra, el diámetro de partida debe cubrir el hombro de '+n(stockReview.shoulder)+' mm más el sobrematerial de mecanizado.');
   const shaftFatigue=[],shaftStatic=[];
   sectionRatios.forEach((_,i)=>{
-    const {d,M,T,se,kf,kfs,a,m,nf,ns}=shaftSection(diameter,i,true);
+    const {d,M,T,se,kf,kfs,a,m,nf,ns}=shaftSection(shaft,diameter,i,true);
     shaftFatigue.push(nf);
     shaftStatic.push(ns);
     eq(math`\sigma_a=\frac{32(${n(kf,5)})(${n(M)})}{\pi(${n(d)})^3}=${stress(a)}`);
@@ -345,5 +403,5 @@ function finishDesign(c, power, belt, entries, check) {
     eq(math`r_{filete}=${mm(fillet)}>r_{\max}=${mm(rmax)}`);
     note('Interferencia de filete. Propuesta de montaje: espaciador de '+n(spacer)+' mm, chaflán interior de al menos '+n(chamfer)+' mm y radio de borde de 1 mm. Verificar el detalle en el plano.');
   }
-  return {module,faceMm,wt,wr,loads,moments,continuous,diameter,planes,kd,ke,gearFatigue,gearStatic,shaftFatigue,shaftStatic,bearingLife,stockReview};
+  return {module,faceMm,wt,wr,loads,moments,continuous,diameter,planes,kd,ke,gearFatigue,gearStatic,shaftFatigue,shaftStatic,bearingLife,stockReview,shaftSteelIndex,shaftTrials};
 }
