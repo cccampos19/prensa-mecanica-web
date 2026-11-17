@@ -156,3 +156,81 @@ button.secondary { border-color: #9dbebc }
   .module-menu { padding: 9px }
   .module-link { min-height: 37px; padding: 7px 8px }
 }
+
+#run-history { margin-top: 18px; padding: 13px 16px; border: 1px solid var(--border); border-radius: 7px; background: #fff }
+#notebook-example { margin-top: 13px }
+#run-history h3 { margin: 0; font-size: 1.07rem }
+#run-history p { margin: 4px 0 10px; color: var(--muted); font-size: .86rem }
+.run-list { display: flex; flex-wrap: wrap; gap: 7px }
+.run-list button { min-height: 40px; gap: 7px }
+.run-list button[aria-pressed=true] { color: #fff; border-color: #196269; background: #196269 }
+.run-list small { font-size: .72em }
+
+#desarrollo {
+  scroll-margin-top: 12px;
+  border: 1px solid #c7d5d2;
+  margin-top: 18px;
+  background: #fff;
+}
+.worksheet-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 19px;
+  background: #e9f2ef;
+}
+.worksheet-heading h3 { margin: 0; font-size: clamp(1.18rem, 3vw, 1.55rem) }
+.worksheet-actions { display: flex; flex-wrap: wrap; gap: 6px }
+.worksheet-heading button { min-height: 33px; font-size: .8rem }
+#worksheet-title { scroll-margin-top: 18px }
+#desarrollo #memory {
+  position: relative;
+  padding: 10px clamp(14px,4vw,48px) 22px;
+  border-color: #ccd9d5;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 23px, #dae8e34d 23px 24px),
+    repeating-linear-gradient(90deg, transparent 0 23px, #dae8e34d 23px 24px),
+    #fbfcfa;
+}
+.worksheet-step { margin: 16px 0 24px; min-width: 0 }
+.worksheet-step > h4 {
+  margin: 0 0 11px;
+  font: 700 1.16rem/1.15 var(--heading);
+  color: #245a60;
+  padding: 0 0 7px;
+  border-bottom: 1px solid #bad0cb;
+}
+.worksheet-step p { max-width: 90ch; margin: 7px 0; overflow-wrap: anywhere }
+.worksheet-step .iteration {
+  background: #ffffffeb;
+  border-color: #d0dedb;
+  border-left: 3px solid #66958b;
+  padding: 9px 11px 8px;
+}
+.worksheet-step h5 { font: 700 1.02rem/1.25 var(--heading); margin: 0 0 8px; color: #265c61 }
+#desarrollo #memory .eq {
+  background: #fff;
+  border: 1px solid #deeae7;
+  border-left: 2px solid #6c9b92;
+  min-width: 0;
+}
+.worksheet-table { max-width: 880px; overflow-x: auto; border: 1px solid #d5e3df; background: #fff; border-radius: 5px }
+.worksheet-table th,.worksheet-table td { vertical-align: top; white-space: normal; overflow-wrap: anywhere }
+.worksheet-table thead { background: #e9f2ef }
+.worksheet-table tbody td:last-child { font-weight: 600 }
+
+@media(max-width:550px) {
+  .worksheet-heading { padding: 12px 14px }
+  .worksheet-step .iteration { padding-inline: 7px }
+}
+@media(min-width:1160px) {
+  .worksheet-class .worksheet-step:has(> .iteration + .iteration) {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 12px;
+  }
+  .worksheet-class .worksheet-step:has(> .iteration + .iteration) > h4 { grid-column: 1 / -1 }
+  .worksheet-class .worksheet-step:has(> .iteration + .iteration) > .iteration { margin: 0 }
+}

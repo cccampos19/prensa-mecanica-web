@@ -20,6 +20,14 @@ function reportEntries(result) {
   return [...result.entries,{type:'section',value:'Bitácora de decisiones'},...log];
 }
 
+function dataTex({headers,rows},escape) {
+  const header=headers.map(value=>'\\textbf{'+escape(value)+'}').join(' & ')+' \\\\ \\hline';
+  const body=rows.map(row=>row.map(escape).join(' & ')+' \\\\');
+  return ['\\begin{longtable}{@{}p{.54\\linewidth}p{.40\\linewidth}@{}}',
+    '\\hline',header,'\\endfirsthead','\\hline',header,'\\endhead',
+    '\\hline','\\endfoot',...body,'\\end{longtable}'].join('\n');
+}
+
 function decisionTex({title,summary,trials},escape) {
   const heading='\\subsection*{'+escape(title)+'}';
   const description=summary?escape(summary):'';
@@ -57,6 +65,7 @@ function tex(entries, subject = 'Prensa mecánica') {
     ...entries.map(({type, value}) => {
       if (type === 'diagram') return diagramTex(value,escape);
       if (type === 'decision') return decisionTex(value,escape);
+      if (type === 'data') return dataTex(value,escape);
       if (type === 'eq') {
         return '\\[\n' + formatEquation(value) + '\n\\]';
       }

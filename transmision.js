@@ -127,6 +127,7 @@ function sizeSpurGears(c,{torque,rpm},ctx,sizing=transmissionMath(ctx)){
   check(c.phi>0&&c.phi<90&&c.yp>0&&c.yg>0&&c.ktGear>=1&&c.gearFat>=1&&c.gearStatic>=1, 'Revisa el ángulo, los factores de Lewis, Kt y las seguridades de engranes.');
   const kd=interpolate(referenceTables[7].rows,c.temperature,'Temperatura');
   const ke=interpolate(referenceTables[6].rows,c.reliability,'Confiabilidad');
+  heading('Material y acabado seleccionados');
   const gear=useSteel(c.gearSteel,c.gearFinish);
   note('Los factores de Lewis y los concentradores son propuestas geométricas editables del perfil, no propiedades de la fila de material. El factor dinámico sigue el caso maquinado de la libreta.');
   if(gear.table==='A-20') {
@@ -139,15 +140,18 @@ function sizeSpurGears(c,{torque,rpm},ctx,sizing=transmissionMath(ctx)){
   const wt=2000*torque/pinion, wr=wt*Math.tan(rad(c.phi));
   const speed=Math.PI*(pinion/25.4)*rpm/12;
   const kv=1200/(1200+speed);
+  heading('Geometría del piñón y la rueda');
   text('Se mantienen el acero, el paso diametral y los números de dientes propuestos. La dimensión que se busca es el ancho de cara.');
   eq(math`m=\frac{25.4}{P_d}=\frac{25.4}{${n(diametral,5)}}=${mm(module)};\quad p=\pi/P_d=${mm(25.4*pitch)}`);
   eq(math`d_p=N_p m=${c.np}(${n(module,5)})=${mm(pinion)};\quad d_g=N_g m=${c.ng}(${n(module,5)})=${mm(gearDiameter)}`);
   eq(math`a=1/P_d=${mm(25.4/diametral)};\quad b=1.25/P_d=${mm(1.25*25.4/diametral)}`);
   eq(math`C=\frac{${n(pinion)}+${n(gearDiameter)}}{2}=${mm(centerDistance)}`);
-  eq(math`W_t=2T_e/d_p=\frac{2(${n(torque)})}{${n(pinion/1000,6)}}=${force(wt)}`);
-  eq(math`W_r=W_t\tan\phi=${n(wt)}\tan(${n(c.phi)}^\circ)=${force(wr)}`);
+  heading('Velocidad y cargas de trabajo');
   eq(math`v=\frac{\pi(${n(pinion/25.4)})(${n(rpm)})}{12}=${dual(speed,'ft/min',.3048/60,'m/s')}`);
   eq(math`K_v=\frac{1200}{1200+v}=\frac{1200}{1200+${n(speed)}}=${n(kv,5)}`);
+  eq(math`W_t=2T_e/d_p=\frac{2(${n(torque)})}{${n(pinion/1000,6)}}=${force(wt)}`);
+  eq(math`W_r=W_t\tan\phi=${n(wt)}\tan(${n(c.phi)}^\circ)=${force(wr)}`);
+  heading('Intervalo de ancho y factores de fatiga');
   eq(math`3p=${mm(minFace*25.4)};\quad 5p=${mm(maxFace*25.4)};\quad k_d=${n(kd)};\quad k_e=${n(ke)}`);
   text('Se sigue la aproximación pulsante de Goodman del ejemplo de clase. La resistencia base pulsante es 1.33 veces 0.5 Sut, corregida con los factores de Marin. El entalle se aplica una vez en la comprobación.');
   const radius=.3/diametral*25.4;
@@ -168,7 +172,7 @@ function sizeSpurGears(c,{torque,rpm},ctx,sizing=transmissionMath(ctx)){
       return {label,y,se,lewis,sigma};
     });
   }
-  heading('Dimensionamiento iterativo de la cara');
+  heading('Corridas de ancho de cara');
   const faceDecision=decision(3,'Ancho de cara de los engranes','mm',
     gear.label+' con paso diametral '+n(diametral,5)+' dientes/in. Intervalo de diseño de '+n(minFace*25.4,2)+' a '+n(maxFace*25.4,2)+' mm según la libreta. Las tablas entregadas no enumeran anchos comerciales.');
   const startFace=Math.min(maxFace,Math.max(minFace,c.faceStart/25.4));
@@ -195,7 +199,7 @@ function sizeSpurGears(c,{torque,rpm},ctx,sizing=transmissionMath(ctx)){
     }
     return bounded;
   },false,0.000001);
-  heading('Comprobación del ancho calculado');
+  heading('Comprobación estática y a fatiga');
   const faceMm=width*25.4;
   eq(math`F=${mm(faceMm)}`);
   const gearFatigue=[], gearStatic=[];
@@ -511,6 +515,7 @@ function solveComponentShaft(c,ctx){
   check(Number.isFinite(c.fillet)&&c.fillet>0&&[c.ktFlex,c.ktTors,c.shaftFat,c.shaftStatic].every(v=>Number.isFinite(v)&&v>=1),
     'Revisa el filete, los concentradores y los objetivos de seguridad. Los concentradores y objetivos deben ser al menos 1.');
   check(shaftLoadFactors.some(({value})=>value===c.kc),'Selecciona un factor de carga de la tabla de clase.');
+  add('heading','Material y acabado seleccionados');
   const shaft=useSteel(c.shaftSteel,c.shaftFinish);
   const kd=interpolate(referenceTables[7].rows,c.temperature,'Temperatura');
   const ke=interpolate(referenceTables[6].rows,c.reliability,'Confiabilidad');
@@ -554,6 +559,10 @@ function solveComponentShaft(c,ctx){
   trial(log,diameter,qualifies?'calculated':'rejected',
     'Índice de fatiga '+n(nf,4)+' frente a '+n(c.shaftFat)+' requerido. Factor de fluencia '+n(staticFactor,4)+' frente a '+n(c.shaftStatic)+' requerido.');
   check(qualifies,'El diámetro evaluado de '+n(diameter,3)+' mm queda por debajo de los objetivos de seguridad de la sección.');
+  let governing='la comprobación a fatiga';
+  if(diameter===dMin) governing='el límite inferior del factor de tamaño';
+  else if(diameter===staticDiameter) governing=nf<=c.shaftFat*(1+1e-6)?'la fatiga y la fluencia':'la comprobación por fluencia';
+  text('El diámetro verificado queda determinado por '+governing+'.');
   add('note',shaft.table==='A-20'
     ?'La tabla A-20 indica un intervalo de 18–32 mm para sus estimaciones ASTM. La aplicación a la barra suministrada depende de su tamaño y condición.'
     :'La tabla A-21 reporta valores medios para probetas de barras de 25.4 mm. La aplicación a la barra suministrada depende de su tamaño y condición.');

@@ -30,19 +30,46 @@ function solveComponentPower(c,{add,check,decision,trial}) {
   ]};
 }
 
+function worksheetNumber(value, unit, digits=3) {
+  return plainNumberNotation(number(value,digits))+(unit?' '+unit:'');
+}
+
+function arrangeWorksheet(component, values, work, metrics, error) {
+  const rows=component.groups.flatMap(([,fields])=>fields.map(([key,label,,options])=>{
+    if(!Number.isFinite(values[key])) return [label,'Dato inválido'];
+    if(!options) return [label,worksheetNumber(values[key],'',6)];
+    const title=options.find((choice,i)=>values[key]===(Array.isArray(choice)?choice[0]:i));
+    return [label,Array.isArray(title)?title[1]:title??'Selección inválida'];
+  }));
+  const entries=[
+    {type:'section',value:component.title},
+    {type:'heading',value:'Datos y propuesta'},
+    {type:'data',value:{headers:['Dato','Valor usado'],rows}}
+  ];
+  const sketch=component.sketch&&work.find(entry=>entry.type==='diagram');
+  if(sketch) entries.push({type:'heading',value:'Croquis'},sketch);
+  const calculations=work.filter(entry=>entry.type!=='diagram');
+  if(calculations.length&&calculations[0].type!=='heading') entries.push({type:'heading',value:'Desarrollo'});
+  entries.push(...calculations);
+  const diagrams=work.filter(entry=>entry.type==='diagram'&&entry!==sketch);
+  if(diagrams.length) entries.push({type:'heading',value:'Diagramas del cálculo'},...diagrams);
+  entries.push({type:'heading',value:'Resultado de la corrida'});
+  if(error) entries.push({type:'note',value:error});
+  else entries.push({type:'data',value:{headers:['Resultado','Valor'],rows:metrics.map(([label,value,unit,digits])=>[label,worksheetNumber(value,unit,digits)])}});
+  return entries;
+}
+
 function calculateComponent(component, values) {
   const trace=createCalculationTrace();
-  const {entries,decisions,add,check}=trace;
-  add('section',component.title);
+  const {entries,decisions,check}=trace;
   try {
     check(Object.values(values).every(Number.isFinite),'Todos los datos deben ser números finitos.');
     const result=component.solve(values,trace);
     check(result.metrics.every(([,value])=>Number.isFinite(value)),'Los resultados exceden el rango numérico del modelo.');
-    return {...result,entries,decisions};
+    return {...result,entries:arrangeWorksheet(component,values,entries,result.metrics),decisions};
   } catch(error) {
     if(error.name!=='Error') throw error;
-    add('note',error.message);
-    return {entries,decisions,metrics:[],error:error.message};
+    return {entries:arrangeWorksheet(component,values,entries,[],error.message),decisions,metrics:[],error:error.message};
   }
 }
 
@@ -56,7 +83,7 @@ const components={
   engranes:{
     title:'Engranes rectos',nav:'Engranes',type:'Transmisión',
     description:'Dimensiona el ancho de cara y comprueba la fatiga y la resistencia estática del piñón y la rueda.',
-    solve:solveComponentGears,materialStage:3,
+    solve:solveComponentGears,materialStage:3,sketch:true,
     groups:[
       ['Carga y geometría',[
         ['torque','Torque en el piñón (N·m)',160],['rpm','Velocidad del piñón (rpm)',900],
@@ -77,7 +104,7 @@ const components={
   banda:{
     title:'Banda plana abierta',nav:'Banda y poleas',type:'Transmisión',
     description:'Dimensiona una banda entre dos poleas a partir de potencia, velocidad y geometría. Usa la tensión de referencia de la tabla 17-2.',
-    solve:solveComponentBelt,materialStage:2,
+    solve:solveComponentBelt,materialStage:2,sketch:true,
     groups:[
       ['Potencia y geometría',[
         ['powerKw','Potencia por transmitir (kW)',5],['rpm','Velocidad de la polea motriz (rpm)',900],
@@ -93,7 +120,7 @@ const components={
   flecha:{
     title:'Dimensionamiento de flecha',nav:'Flecha',type:'Ejes y apoyos',
     description:'Calcula el diámetro de una sección circular con flexión alternante y torsión constante. Ingresa directamente el momento y el torque de la sección crítica.',
-    solve:solveComponentShaft,materialStage:5,
+    solve:solveComponentShaft,materialStage:5,sketch:true,
     groups:[
       ['Cargas y sección',[
         ['moment','Momento flector alternante (N·m)',200],['torque','Torque constante (N·m)',100],
@@ -114,7 +141,7 @@ const components={
   equilibrio:{
     title:'Equilibrio de una flecha',nav:'Reacciones y momentos',type:'Ejes y apoyos',
     description:'Calcula las reacciones y el momento máximo en una flecha simplemente apoyada con dos cargas radiales. Usa cero en las componentes que no apliquen.',
-    solve:solveComponentBalance,
+    solve:solveComponentBalance,sketch:true,
     groups:[
       ['Posiciones desde el apoyo izquierdo',[
         ['span','Distancia entre apoyos (mm)',550],['x1','Posición de la carga 1 (mm)',150],['x2','Posición de la carga 2 (mm)',370]

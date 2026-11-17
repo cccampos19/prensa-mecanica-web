@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
   <link rel="stylesheet" href="interfaz.css">
-  <link rel="stylesheet" href="taller.css">
+  <link rel="stylesheet" href="taller.css?v=libreta1">
 </head>
 <body>
 <a class="skip" href="#contenido">Ir al contenido</a>
@@ -17,7 +17,7 @@
     <div>
       <p class="project-name">Diseño de elementos de máquinas</p>
       <h1>Diseño por componente</h1>
-      <p>Elige un elemento y calcula con tus propios datos.</p>
+      <p>Plantea una corrida y sigue el desarrollo con tus datos.</p>
     </div>
     <a class="original-link" href="https://cccampos19.github.io/prensa-mecanica-web/">Caso de la prensa <span aria-hidden="true">↗</span></a>
   </div>
@@ -38,11 +38,12 @@
         <p id="module-type"></p>
         <h2 id="module-title"></h2>
         <p id="module-description"></p>
+        <button type="button" class="secondary" id="notebook-example" hidden>Ver ejercicio de la libreta</button>
       </header>
       <div class="module-grid">
         <section class="input-panel" aria-labelledby="input-title">
           <header class="panel-heading">
-            <h3 id="input-title">Datos de entrada</h3>
+            <h3 id="input-title" tabindex="-1">Datos de entrada</h3>
             <p>El formulario está precargado con un ejemplo editable.</p>
           </header>
           <form id="proposal-form">
@@ -70,28 +71,40 @@
           </div>
         </section>
       </div>
+      <nav id="run-history" aria-labelledby="run-history-title" hidden>
+        <h3 id="run-history-title">Corridas</h3>
+        <p>Edita los datos y calcula de nuevo para comparar otra propuesta.</p>
+        <div id="run-list" class="run-list"></div>
+      </nav>
+      <section id="desarrollo" aria-labelledby="worksheet-title" hidden>
+        <header class="worksheet-heading">
+          <h3 id="worksheet-title" tabindex="-1">Resolución paso a paso</h3>
+          <div class="worksheet-actions">
+            <button type="button" class="secondary" id="input-jump">Editar datos</button>
+            <button type="button" class="secondary" id="result-jump">Ir al resultado</button>
+          </div>
+        </header>
+        <article id="memory" aria-label="Resolución paso a paso"></article>
+      </section>
       <section id="bitacora" aria-labelledby="decision-title" hidden>
         <h3 id="decision-title">Bitácora de selección</h3>
         <div id="decision-log" class="decision-grid"></div>
       </section>
-      <details id="desarrollo" hidden>
-        <summary>Desarrollo del cálculo y diagramas</summary>
-        <article id="memory" aria-label="Memoria de cálculo"></article>
-      </details>
     </section>
   </main>
 </div>
 <script src="catalogos.js"></script>
 <script src="motor.js"></script>
-<script src="transmision.js"></script>
+<script src="transmision.js?v=libreta1"></script>
 <script src="resorte.js"></script>
 <script src="componentes-banda-resorte.js"></script>
 <script src="componentes-apoyos.js"></script>
 <script src="diagramas.js"></script>
 <script src="materiales.js"></script>
-<script src="componentes.js"></script>
-<script src="memoria.js"></script>
-<script src="memoria-pdf.js"></script>
-<script src="app.js"></script>
+<script src="componentes.js?v=libreta1"></script>
+<script src="libreta-engranes.js?v=libreta1"></script>
+<script src="memoria.js?v=libreta1"></script>
+<script src="memoria-pdf.js?v=libreta1"></script>
+<script src="app.js?v=libreta1"></script>
 </body>
 </html>

@@ -12,7 +12,11 @@ const resultsHost=document.querySelector('#results');
 const decisionSection=document.querySelector('#bitacora');
 const decisionsHost=document.querySelector('#decision-log');
 const development=document.querySelector('#desarrollo');
+const worksheetTitle=document.querySelector('#worksheet-title');
 const memoryHost=document.querySelector('#memory');
+const historyHost=document.querySelector('#run-history');
+const runList=document.querySelector('#run-list');
+const notebookButton=document.querySelector('#notebook-example');
 const texButton=document.querySelector('#download');
 const pdfButton=document.querySelector('#download-pdf');
 const exportStatus=document.querySelector('#export-status');
@@ -32,7 +36,7 @@ function example(component) {
 }
 
 function stateFor(key) {
-  if(!states.has(key)) states.set(key,{values:example(components[key]),result:null});
+  if(!states.has(key)) states.set(key,{values:example(components[key]),result:null,runs:[]});
   return states.get(key);
 }
 
@@ -125,40 +129,58 @@ function renderDecisions(decisions) {
   decisionsHost.replaceChildren(...cards);
 }
 
+function worksheetTable({headers,rows}) {
+  const frame=node('div',null,'worksheet-table');
+  const table=node('table');
+  const head=table.createTHead().insertRow();
+  for(const label of headers){
+    const cell=node('th',label);
+    cell.scope='col';
+    head.append(cell);
+  }
+  const body=table.createTBody();
+  for(const values of rows){
+    const row=body.insertRow();
+    for(const value of values) row.insertCell().textContent=value;
+  }
+  frame.append(table);
+  return frame;
+}
+
 function renderMemory(entries) {
   memoryHost.replaceChildren();
+  let step=memoryHost;
   let target=memoryHost;
   for(const {type,value} of entries){
-    if(type==='section'){
-      target=memoryHost;
-      continue;
-    }
-    if(type==='diagram'){
+    if(type==='section') continue;
+    if(type==='heading'){
+      step=node('section',null,'worksheet-step');
+      step.append(node('h4',value));
+      memoryHost.append(step);
+      target=step;
+    }else if(type==='iteration'){
+      target=node('div',null,'iteration');
+      target.append(node('h5',value));
+      step.append(target);
+    }else if(type==='data'){
+      target.append(worksheetTable(value));
+    }else if(type==='diagram'){
       const figure=node('figure',null,'design-diagram');
       const canvas=node('canvas');
       canvas.width=840;
       canvas.height=250;
       canvas.setAttribute('role','img');
       canvas.setAttribute('aria-label',value.title+'. '+value.caption);
-      figure.append(node('h3',value.title),canvas,node('figcaption',value.caption));
-      memoryHost.append(figure);
+      figure.append(node('h5',value.title),canvas,node('figcaption',value.caption));
+      target.append(figure);
       paintDiagram(canvas,value);
-      continue;
-    }
-    if(type==='heading'){
-      target=memoryHost;
-    }else if(type==='iteration'){
-      target=node('div',null,'iteration');
-      memoryHost.append(target);
-    }
-    if(type==='eq'){
+    }else if(type==='eq'){
       const element=node('div',null,'eq');
       if(window.katex) window.katex.render(formatEquation(value),element,{displayMode:true,throwOnError:false});
       else element.textContent=value;
       target.append(element);
     }else{
-      const tag=type==='heading'?'h3':type==='iteration'?'h4':'p';
-      target.append(node(tag,plainNumberNotation(value),type==='note'?'note':''));
+      target.append(node('p',plainNumberNotation(value),type==='note'?'note':''));
     }
   }
 }
@@ -176,22 +198,25 @@ function renderResults(result) {
   resultStatus.dataset.status='';
   updateDownloads();
   development.hidden=!result;
+  development.classList.toggle('worksheet-class',Boolean(result?.notebook));
   renderDecisions(result?.decisions||[]);
   if(!result){
     resultsHost.append(node('p','Pulsa Calcular para ver las dimensiones y comprobaciones de este componente.'));
     memoryHost.replaceChildren();
     return;
   }
+  worksheetTitle.textContent=result.notebook?'Ejercicio de la libreta · Engranes':
+    'Corrida '+result.run+' · '+components[activeKey].title;
   if(result.error){
     resultStatus.textContent='Revisar datos';
     resultStatus.dataset.status='error';
     resultsHost.append(node('p',plainNumberNotation(result.error),'note'));
   }else{
-    resultStatus.textContent='Calculado';
+    resultStatus.textContent=result.notebook?'Ejercicio de la libreta':'Calculado';
     const list=node('dl',null,'result-metrics');
     for(const [title,value,unit,digits=3] of result.metrics){
       const item=node('div');
-      const formatted=plainNumberNotation(number(value,digits))+(unit?' '+unit:'');
+      const formatted=worksheetNumber(value,unit,digits);
       item.append(node('dt',title),node('dd',formatted));
       list.append(item);
     }
@@ -201,6 +226,33 @@ function renderResults(result) {
     }
   }
   renderMemory(result.entries);
+}
+
+function showWorksheet() {
+  development.scrollIntoView({block:'start'});
+  worksheetTitle.focus({preventScroll:true});
+}
+
+function renderRunHistory(state) {
+  historyHost.hidden=!state.runs.length;
+  const buttons=state.runs.map(run=>{
+    const button=node('button','Corrida '+run.result.run,'secondary');
+    button.type='button';
+    button.setAttribute('aria-pressed',String(run.result===state.result));
+    button.append(node('small',run.result.error?'Revisar datos':'Calculada'));
+    button.addEventListener('click',()=>{
+      state.values={...run.values};
+      state.result=run.result;
+      exportStatus.textContent='';
+      renderFields(components[activeKey],state.values);
+      renderMaterial(components[activeKey],state);
+      renderResults(state.result);
+      renderRunHistory(state);
+      showWorksheet();
+    });
+    return button;
+  });
+  runList.replaceChildren(...buttons);
 }
 
 function renderCatalogs() {
@@ -240,15 +292,16 @@ function openModule() {
   activeKey=requested;
   const component=components[activeKey];
   const state=stateFor(activeKey);
+  notebookButton.hidden=activeKey!=='engranes';
   document.querySelector('#module-type').textContent=component.type;
   document.querySelector('#module-title').textContent=component.title;
   document.querySelector('#module-description').textContent=component.description;
   exportStatus.textContent='';
   materialDetails.open=false;
-  development.open=false;
   renderFields(component,state.values);
   renderMaterial(component,state);
   renderResults(state.result);
+  renderRunHistory(state);
 }
 
 for(const [key,component] of Object.entries(components)){
@@ -273,6 +326,7 @@ form.addEventListener('input',()=>{
     state.result=null;
     exportStatus.textContent='';
     renderResults(null);
+    renderRunHistory(state);
   }
   renderMaterial(components[activeKey],state);
 });
@@ -289,13 +343,28 @@ form.addEventListener('submit',event=>{
   const component=components[activeKey];
   const state=stateFor(activeKey);
   state.values=inputValues();
-  state.result=calculateComponent(component,numericValues(state.values));
+  if(!state.result||state.result.notebook){
+    state.result={...calculateComponent(component,numericValues(state.values)),run:state.runs.length+1};
+    state.runs.push({values:{...state.values},result:state.result});
+  }
   exportStatus.textContent='';
   renderMaterial(component,state);
   renderResults(state.result);
-  development.open=Boolean(state.result.error);
-  document.querySelector('#result-title').focus();
+  renderRunHistory(state);
+  showWorksheet();
 });
+
+notebookButton.addEventListener('click',()=>{
+  const state=stateFor(activeKey);
+  state.result={...calculateNotebookGears(),notebook:true};
+  exportStatus.textContent='';
+  renderResults(state.result);
+  renderRunHistory(state);
+  showWorksheet();
+});
+
+document.querySelector('#result-jump').addEventListener('click',()=>document.querySelector('#result-title').focus());
+document.querySelector('#input-jump').addEventListener('click',()=>document.querySelector('#input-title').focus());
 
 function saveDocument(blob, filename) {
   const url=URL.createObjectURL(blob);
@@ -307,13 +376,18 @@ function saveDocument(blob, filename) {
 }
 
 function filename(key,result,extension) {
-  return 'memoria_'+key+(result.error?'_revision':'')+'.'+extension;
+  const variant=result.notebook?'_libreta':result.run>1?'_corrida_'+result.run:'';
+  return 'memoria_'+key+variant+(result.error?'_revision':'')+'.'+extension;
+}
+
+function reportSubject(key,result) {
+  return result.notebook?'Ejercicio de engranes de la libreta':'Corrida '+result.run+' · '+components[key].title;
 }
 
 texButton.addEventListener('click',()=>{
   const {result}=stateFor(activeKey);
   if(!result) return;
-  const source=tex(reportEntries(result),components[activeKey].title);
+  const source=tex(reportEntries(result),reportSubject(activeKey,result));
   saveDocument(new Blob([source],{type:'application/x-tex;charset=utf-8'}),filename(activeKey,result,'tex'));
 });
 
@@ -327,7 +401,7 @@ pdfButton.addEventListener('click',async()=>{
   try{
     const pdf=await buildMemoryPdf(reportEntries(result),formatEquation,(count,total)=>{
       if(activeKey===key) exportStatus.textContent='Generando PDF… '+Math.floor(100*count/total)+' %';
-    },components[key].title);
+    },reportSubject(key,result));
     saveDocument(pdf,filename(key,result,'pdf'));
     if(activeKey===key) exportStatus.textContent='PDF listo.';
   }catch(error){

@@ -96,9 +96,9 @@ async function buildMemoryPdf(entries,format,onProgress,subject='Prensa mecánic
     y+=gap;
   }
 
-  function decisionTable({title,trials,summary}){
+  function reportTable({title,headers,data,summary,fractions}){
     const size=9.5, lineHeight=12, horizontalPad=8, verticalPad=6;
-    const columns=[width*.20,width*.20,width*.60];
+    const columns=fractions.map(fraction=>width*fraction);
 
     function measureRow(values,bold=false){
       pdf.setFont('helvetica',bold?'bold':'normal');
@@ -126,29 +126,34 @@ async function buildMemoryPdf(entries,format,onProgress,subject='Prensa mecánic
     }
 
     const titleStyle={bold:true,size:12,gap:6,color:'#21594c'};
-    if(!trials.length){
+    if(!data.length){
       paragraph(title,{...titleStyle,keep:24});
       paragraph(summary||'La corrida no llegó a probar una medida.');
       return;
     }
 
-    const header=measureRow(['Medida','Resultado','Motivo'],true);
-    const rows=trials.map(({measure,reason,status})=>{
-      const selected=status==='selected';
-      return {row:measureRow([measure,decisionLabels[status],reason],selected),fill:selected?'#eaf5ee':'#ffffff'};
+    const header=measureRow(headers,true);
+    const rows=data.map(({values,selected})=>{
+      return {row:measureRow(values,selected),fill:selected?'#eaf5ee':'#ffffff'};
     });
-    paragraph(title,{...titleStyle,keep:header.height+rows[0].row.height});
+    if(title) paragraph(title,{...titleStyle,keep:header.height+rows[0].row.height});
+    else ensureRoom(header.height+rows[0].row.height);
     drawRow(header,'#edf2ee');
     for(const {row,fill} of rows){
       if(y+row.height>bottom){
-        ensureRoom(row.height);
-        paragraph(title+' · continuación',{...titleStyle,keep:header.height+row.height});
+        ensureRoom(header.height+row.height);
+        if(title) paragraph(title+' · continuación',{...titleStyle,keep:header.height+row.height});
         drawRow(header,'#edf2ee');
       }
       drawRow(row,fill);
     }
     y+=9;
     if(summary) paragraph(summary,{size:9.5,color:'#4e655b'});
+  }
+
+  function decisionTable({title,trials,summary}){
+    const data=trials.map(({measure,reason,status})=>({values:[measure,decisionLabels[status],reason],selected:status==='selected'}));
+    reportTable({title,headers:['Medida','Resultado','Motivo'],data,summary,fractions:[.20,.20,.60]});
   }
 
   function vectorDiagram(diagram){
@@ -186,6 +191,8 @@ async function buildMemoryPdf(entries,format,onProgress,subject='Prensa mecánic
       vectorDiagram(value);
     }else if(type==='decision'){
       decisionTable(value);
+    }else if(type==='data'){
+      reportTable({headers:value.headers,data:value.rows.map(values=>({values})),fractions:[.55,.45]});
     }else if(type==='section'){
       if(index>0&&y>54) pdf.addPage();
       if(index>0) y=54;
