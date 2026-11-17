@@ -312,9 +312,22 @@ function finishDesign(c, power, belt, entries, check) {
   heading('Fatiga y resistencia del diámetro comercial');
   text('La comprobación utiliza el diámetro común que se selecciona en la etapa de rodamientos.');
   eq(math`d_{base}=${mm(diameter)}`);
-  if(shaft.table==='A-20'&&(diameter<18||diameter>32)) {
-    note('El diámetro de flecha de '+n(diameter)+' mm queda fuera del intervalo de 18–32 mm que indica la tabla A-20 para estimar resistencias ASTM. El cálculo usa la fila elegida y es provisional hasta confirmar las propiedades del material en ese tamaño.');
+  const stockReview={
+    base:diameter,
+    section:1.2*diameter,
+    shoulder:1.5*diameter,
+    a20CoversFinishedSizes:diameter>=18&&1.5*diameter<=32
+  };
+  heading('Alcance de las tablas de acero');
+  text('Tabla A-20, p. 1004: mínimos ASTM estimados para tamaños de 18 a 32 mm, sujetos a los requisitos de suministro indicados en la tabla.');
+  text('Tabla A-21, pp. 1005–1006: propiedades medias de probetas de 0.505 in (12.83 mm) mecanizadas de barras redondas de 1 in (25.4 mm). Los valores de temple y revenido proceden de una sola colada. Las filas no garantizan mínimos para la barra de esta flecha.');
+  eq(math`d_{base}=${mm(stockReview.base)};\quad d_3=${mm(stockReview.section)};\quad d_{hombro}=${mm(stockReview.shoulder)}`);
+  if(!stockReview.a20CoversFinishedSizes) {
+    note('Las tablas entregadas no respaldan elegir otro acero con resistencias garantizadas para estas dimensiones. Se conserva la fila seleccionada como referencia y la comprobación de fatiga es provisional.');
+  } else {
+    note('Los tamaños acabados quedan dentro del intervalo dimensional de A-20. Se debe comprobar que el tamaño de suministro y la especificación ASTM correspondan a la fila usada. A-21 sigue aportando valores medios.');
   }
+  text('Para cerrar la selección, solicita el certificado del lote con los mínimos de Sut y Sy para el grado, el estado de suministro o tratamiento y el diámetro real de partida. Si la flecha se mecaniza de una sola barra, el diámetro de partida debe cubrir el hombro de '+n(stockReview.shoulder)+' mm más el sobrematerial de mecanizado.');
   const shaftFatigue=[],shaftStatic=[];
   sectionRatios.forEach((_,i)=>{
     const {d,M,T,se,kf,kfs,a,m,nf,ns}=shaftSection(diameter,i,true);
@@ -332,5 +345,5 @@ function finishDesign(c, power, belt, entries, check) {
     eq(math`r_{filete}=${mm(fillet)}>r_{\max}=${mm(rmax)}`);
     note('Interferencia de filete. Propuesta de montaje: espaciador de '+n(spacer)+' mm, chaflán interior de al menos '+n(chamfer)+' mm y radio de borde de 1 mm. Verificar el detalle en el plano.');
   }
-  return {module,faceMm,wt,wr,loads,moments,continuous,diameter,planes,kd,ke,gearFatigue,gearStatic,shaftFatigue,shaftStatic,bearingLife};
+  return {module,faceMm,wt,wr,loads,moments,continuous,diameter,planes,kd,ke,gearFatigue,gearStatic,shaftFatigue,shaftStatic,bearingLife,stockReview};
 }

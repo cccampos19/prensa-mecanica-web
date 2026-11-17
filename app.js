@@ -236,7 +236,11 @@ function stageFacts(result,stage){
 function stageCaution(result,stage){
   if(stage===2&&result.belt) return 'Pendiente de servicio: la tabla 17-2 da el límite a 600 ft/min. La banda trabaja a '+metric(result.belt.review.operatingFpm,'ft/min',0)+' y pasa por un rodillo de contraflexión.';
   if(stage===3&&result.design) return 'La comprobación a fatiga usa el método de los apuntes y los factores de Lewis y entalle propuestos. Coteja esos factores con el perfil real del diente.';
-  if(stage===5&&result.design) return 'Se verifica la fatiga con la convención de Hencky–Marin de la libreta. El multiplicador de carga equivalente es la raíz cuadrada del índice. La aplicabilidad de los datos del acero depende del diámetro y del estado del material.';
+  if(stage===5&&result.design) {
+    const {stockReview}=result.design;
+    if(!stockReview.a20CoversFinishedSizes) return 'Fatiga provisional. A-20 cubre 18–32 mm y A-21 da promedios de probetas de barras de 25.4 mm. La flecha calculada tiene base de '+metric(stockReview.base,'mm')+' y hombro de '+metric(stockReview.shoulder,'mm')+'.';
+    return 'Se verifica la fatiga con la convención de Hencky–Marin de la libreta. Confirma el diámetro y el estado de suministro de la barra.';
+  }
   if(stage===6&&result.design) return 'La vida L10 comprueba fatiga de contacto con las cargas calculadas y las capacidades de la tabla 11-2.';
   if(stage===7&&result.spring) return 'Fatiga del cuerpo y los ganchos pendiente. Se calculan los esfuerzos alternantes y medios, pero las tablas 10-4 y 10-5 no incluyen resistencia cíclica.';
   return '';

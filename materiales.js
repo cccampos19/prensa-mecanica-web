@@ -80,7 +80,7 @@ function steelMaterial(steelIndex,finishIndex,forShaft) {
   const note=carbon
     ?'La tabla A-20 da estimaciones de resistencia para tamaños de 18 a 32 mm.'+
         (forShaft?' Para un diámetro fuera de ese intervalo se necesita certificar la resistencia mínima del material suministrado.':'')
-    :'La tabla A-21 da propiedades medias para el tratamiento indicado. Verifica el certificado del material suministrado.';
+    :'La tabla A-21 da propiedades medias para el tratamiento indicado, en probetas mecanizadas de barras de 25.4 mm. Verifica los mínimos para el diámetro y estado de suministro reales.';
   const cards=[{title:steel.label,source:table.label,rows,note}];
   const finish=finishes[finishIndex];
   if(finish){
@@ -151,7 +151,25 @@ function stageMaterial(stage,values,result) {
   switch(Number(stage)){
     case 2: return bandMaterial(values,result);
     case 3: return steelMaterial(values.gearSteel,values.gearFinish,false);
-    case 5: return steelMaterial(values.shaftSteel,values.shaftFinish,true);
+    case 5: {
+      const cards=steelMaterial(values.shaftSteel,values.shaftFinish,true);
+      const stock=result?.design?.stockReview;
+      if(stock) cards.push({
+        title:'Alcance para esta flecha',
+        source:'Notas de las tablas A-20 y A-21',
+        rows:[
+          ['Diámetro base',materialUnit(stock.base,'mm')],
+          ['Sección 3',materialUnit(stock.section,'mm')],
+          ['Hombro mayor',materialUnit(stock.shoulder,'mm')],
+          ['Intervalo de A-20','18–32 mm'],
+          ['Barra de las probetas A-21','25.4 mm']
+        ],
+        note:stock.a20CoversFinishedSizes
+          ? 'Confirma el tamaño real de suministro y los requisitos de la fila.'
+          : 'Las tablas entregadas no garantizan las resistencias para este tamaño. Para una flecha de una sola pieza, pide mínimos de Sut y Sy certificados para la barra real que cubrirá el hombro mayor.'
+      });
+      return cards;
+    }
     case 6: return bearingMaterial(values,result);
     case 7: return springWireMaterial(values,result);
     default: return [];
