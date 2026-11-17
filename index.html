@@ -1,78 +1,91 @@
 <!doctype html>
 <html lang="es">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Prensa mecánica · Memoria de cálculo</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
-<link rel="stylesheet" href="interfaz.css?v=8">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2d1052">
+  <title>Prensa mecánica · Diseño y memoria de cálculo</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
+  <link rel="stylesheet" href="interfaz.css?v=12">
+</head>
+<body>
+<a class="skip" href="#contenido">Ir al contenido</a>
 <header class="top">
   <div class="wrap top-content">
-    <div><p class="project-name">Diseño de elementos de máquinas</p><h1>Prensa mecánica</h1></div>
-    <div class="downloads">
+    <div class="top-title">
+      <p class="project-name">Diseño de elementos de máquinas</p>
+      <h1>Prensa mecánica</h1>
+    </div>
+    <div class="downloads" aria-label="Exportar memoria">
       <button type="button" id="download-pdf" disabled>Descargar PDF</button>
       <button type="button" id="download" disabled>Descargar .tex</button>
       <span id="pdf-status" role="status"></span>
     </div>
   </div>
 </header>
-<main class="wrap">
-<nav class="views" aria-label="Vistas del proyecto">
-  <a href="#resultados" data-view="resultados">Resultados</a>
-  <a href="#datos" data-view="datos">Editar datos</a>
-  <a href="#memoria" data-view="memoria">Memoria y diagramas</a>
-  <a href="#catalogos" data-view="catalogos">Catálogos</a>
-</nav>
-<p id="status" role="status"></p>
-<section id="resultados" class="view">
-  <div class="section-title"><h2>Resultados del cálculo</h2><a class="button secondary" href="#datos" data-view="datos">Editar datos</a></div>
-  <div id="overview"></div>
-</section>
-<section id="datos" class="view" hidden>
-  <h2>Editar datos</h2>
-  <form id="inputs" novalidate>
-    <div class="editor">
-      <label for="edit-stage" class="picker">Etapa a editar
-        <select id="edit-stage">
-          <option value="powerFields">Potencia y velocidades</option>
-          <option value="beltFields">Poleas y banda</option>
-          <option value="gearFields">Engranes</option>
-          <option value="balanceFields">Equilibrio de la flecha</option>
-          <option value="shaftFields">Dimensionamiento de la flecha</option>
-          <option value="bearingFields">Rodamientos</option>
-          <option value="springFields">Brazo tensor y resorte</option>
-        </select>
-      </label>
-      <fieldset id="powerFields"><legend>Potencia y velocidades</legend></fieldset>
-      <fieldset id="beltFields" hidden><legend>Poleas y banda</legend><label>Material · tabla 17-2<select name="belt"></select></label></fieldset>
-      <fieldset id="gearFields" hidden><legend>Engranes</legend></fieldset>
-      <fieldset id="balanceFields" hidden><legend>Equilibrio de la flecha</legend></fieldset>
-      <fieldset id="shaftFields" hidden><legend>Dimensionamiento de la flecha</legend></fieldset>
-      <fieldset id="bearingFields" hidden><legend>Rodamientos</legend></fieldset>
-      <fieldset id="springFields" hidden><legend>Brazo tensor y resorte</legend></fieldset>
+<main id="contenido" class="wrap">
+  <nav class="views" aria-label="Etapas y vistas del proyecto">
+    <a href="#resultados" data-view="resultados" aria-current="page">Resumen</a>
+    <a href="#etapa-1" data-view="etapa-1">Potencia</a>
+    <a href="#etapa-2" data-view="etapa-2">Banda y poleas</a>
+    <a href="#etapa-3" data-view="etapa-3">Engranes</a>
+    <a href="#etapa-4" data-view="etapa-4">Equilibrio</a>
+    <a href="#etapa-5" data-view="etapa-5">Flecha</a>
+    <a href="#etapa-6" data-view="etapa-6">Rodamientos</a>
+    <a href="#etapa-7" data-view="etapa-7">Resorte</a>
+    <a href="#etapa-8" data-view="etapa-8">Diagramas</a>
+    <a href="#catalogos" data-view="catalogos">Catálogos</a>
+  </nav>
+  <p id="status" role="status"></p>
+  <section id="resultados" class="view" aria-labelledby="results-title">
+    <div class="section-title">
+      <h2 id="results-title">Resultados del cálculo</h2>
+      <a class="button secondary" href="#etapa-1">Editar datos de la tarea</a>
     </div>
-    <div class="actions">
-      <button type="submit">Calcular</button>
-      <button class="secondary" type="button" id="restore">Restaurar datos de la tarea</button>
+    <div id="overview"></div>
+  </section>
+  <section id="datos" class="view" aria-labelledby="stage-title" hidden>
+    <h2 id="stage-title">Potencia y velocidades</h2>
+    <div id="stage-result"></div>
+    <div class="stage-workspace">
+    <form id="inputs" novalidate>
+      <div class="editor">
+        <fieldset id="powerFields"><legend>Datos de potencia</legend></fieldset>
+        <fieldset id="beltFields" hidden><legend>Datos de banda y poleas</legend><label>Material · tabla 17-2<select name="belt"></select></label></fieldset>
+        <fieldset id="gearFields" hidden><legend>Datos de engranes</legend></fieldset>
+        <fieldset id="balanceFields" hidden><legend>Posiciones sobre la flecha</legend></fieldset>
+        <fieldset id="shaftFields" hidden><legend>Datos de dimensionamiento</legend></fieldset>
+        <fieldset id="bearingFields" hidden><legend>Datos de rodamientos</legend></fieldset>
+        <fieldset id="springFields" hidden><legend>Datos del brazo tensor y resorte</legend></fieldset>
+        <div class="actions">
+          <button type="submit">Calcular</button>
+          <button class="secondary" type="button" id="restore">Restaurar datos de la tarea</button>
+        </div>
+      </div>
+    </form>
+    <div id="stage-material"></div>
     </div>
-  </form>
-</section>
-<section id="memoria" class="view" hidden>
-  <h2>Memoria y diagramas</h2>
-  <label for="memory-stage" class="picker">Etapa de la memoria<select id="memory-stage"></select></label>
-  <article id="memory" aria-label="Memoria de cálculo"></article>
-</section>
-<section id="catalogos" class="view" hidden>
-  <h2>Catálogos</h2>
-  <div id="catalog-tables"></div>
-</section>
+    <section id="memoria" aria-label="Desarrollo y diagramas">
+      <details id="stage-calculation">
+        <summary>Desarrollo del cálculo</summary>
+        <article id="memory" aria-label="Memoria de cálculo"></article>
+      </details>
+    </section>
+  </section>
+  <section id="catalogos" class="view" aria-labelledby="catalog-title" hidden>
+    <h2 id="catalog-title">Catálogos</h2>
+    <div id="catalog-tables"></div>
+  </section>
 </main>
-<script src="catalogos.js"></script>
+<script src="catalogos.js?v=12"></script>
 <script src="tensor.js?v=6"></script>
-<script src="motor.js?v=11"></script>
-<script src="transmision.js?v=6"></script>
-<script src="resorte.js?v=11"></script>
+<script src="motor.js?v=12"></script>
+<script src="transmision.js?v=12"></script>
+<script src="resorte.js?v=12"></script>
 <script src="diagramas.js?v=6"></script>
 <script src="memoria-pdf.js?v=8"></script>
-<script src="app.js?v=10"></script>
+<script src="materiales.js?v=12"></script>
+<script src="app.js?v=12"></script>
+</body>
 </html>

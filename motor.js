@@ -74,7 +74,7 @@ function calculate(c) {
     const motorFits = c.nominal * 1000 >= motorPower;
     eq(math`P_{nom}=${kw(c.nominal*1000)}${motorFits ? '\\ge ' : '<'}P_m=${kw(motorPower)}`);
     check(motorFits, 'La potencia nominal propuesta es insuficiente.');
-    power = {shaftRpm, outRpm, motorPower, shaftTorque};
+    power = {shaftRpm,outRpm,motorPower,shaftTorque,outPower,outTorque,motorTorque};
 
     add('section', 'Poleas y banda plana');
     for (const [value, label] of [[c.pulley,'diámetro conducido'], [c.centers,'distancia entre centros'], [c.start,'ancho inicial']]) {
@@ -118,7 +118,7 @@ function calculate(c) {
         continue;
       }
       rollerDiameter=trial;
-      add('text','Rodillo de '+n(trial)+' mm. Cumple diámetro mínimo y contacto en el recorrido.');
+      add('text','Rodillo de '+n(trial)+' mm. Cumple el mínimo geométrico de referencia y conserva contacto en el recorrido.');
       break;
     }
     check(geometry,'La selección del rodillo no tiene solución geométrica. '+(rejection||'El mínimo de tabla excede el espacio disponible.'));
@@ -235,7 +235,7 @@ function calculate(c) {
     add('note','Dato faltante para contraflexión y vida: diámetro mínimo de rodillo exterior para la banda elegida y curva de duración frente a flexiones inversas, o ficha del fabricante que califique la configuración. El rodillo propuesto mide '+n(rollerDiameter)+' mm y cada punto de la banda pasa por él aproximadamente '+n(lapsPerSecond,2)+' veces por segundo en marcha continua. Hace falta definir la vida objetivo de banda y su ciclo de servicio.');
     const beltReview={demandImperial,allowableIn,operatingFpm,maximumGrip,lapsPerSecond};
     belt = {selected,speed,length,capacity,...final,fy:mid.fy,fz:mid.fz,rollerDiameter,driver,driven,review:beltReview};
-    const design = finishDesign(c, power, belt, add, check);
+    const design = finishDesign(c, power, belt, entries, check);
     add('section','Brazo tensor y resorte de tensión');
     const spring = springDesign(c, belt, add, check);
     add('heading','Conclusión y especificaciones de la propuesta');

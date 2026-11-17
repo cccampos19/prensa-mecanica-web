@@ -20,17 +20,17 @@ const defaults = {
 };
 const fields = {
   powerFields: [
-    ['rpm','Velocidad del motor (rpm)'], ['ratio','Relación de banda'],
-    ['load','Torque de salida (kgf·cm)'], ['pinion','Diámetro primitivo del piñón (mm)'],
-    ['gear','Diámetro primitivo del engrane (mm)'], ['gearEff','Eficiencia de engranes (%)'],
-    ['beltEff','Eficiencia de banda (%)'], ['nominal','Motor nominal (kW)']
+    ['rpm','Velocidad del motor (rpm)'], ['load','Torque de salida (kgf·cm)'],
+    ['nominal','Potencia nominal propuesta (kW)']
   ],
   beltFields: [
+    ['ratio','Relación de banda'], ['beltEff','Eficiencia de la banda (%)'],
     ['pulley','Diámetro de polea conducida (mm)'], ['centers','Distancia entre centros (m)'],
     ['start','Ancho inicial propuesto (mm)'], ['angle','Orientación de carga (°)']
   ],
   gearFields: [
-    ['np','Dientes del piñón'], ['ng','Dientes de la rueda'], ['phi','Ángulo de presión (°)'],
+    ['pinion','Diámetro primitivo del piñón (mm)'], ['gear','Diámetro primitivo de la rueda (mm)'],
+    ['gearEff','Eficiencia de engranes (%)'], ['np','Dientes del piñón'], ['ng','Dientes de la rueda'], ['phi','Ángulo de presión (°)'],
     ['yp','Lewis · piñón'], ['yg','Lewis · rueda'], ['ktGear','Kt en raíz del diente'],
     ['gearFat','Seguridad a fatiga'], ['gearStatic','Seguridad estática']
   ],
@@ -40,8 +40,8 @@ const fields = {
   ],
   shaftFields: [
     ['shaftStart','Diámetro inicial (mm)'], ['fillet','Radio de filete relativo r/d'],
-    ['kc','Factor de carga kc'], ['ktFlex','Kt en flexión'], ['ktTors','Kts en torsión'],
-    ['shaftFat','Seguridad a fatiga'], ['shaftStatic','Seguridad estática'],
+    ['ktFlex','Kt en flexión'], ['ktTors','Kts en torsión'],
+    ['shaftFat','Índice mínimo de Hencky–Marin'], ['shaftStatic','Seguridad estática'],
     ['temperature','Temperatura de servicio (°C) · flecha y engranes'],
     ['reliability','Confiabilidad de fatiga (%) · flecha y engranes']
   ],
@@ -66,12 +66,12 @@ for (const [group, definitions] of Object.entries(fields)) {
     document.getElementById(group).append(label);
   }
 }
-function addSelect(group, name, title, labels) {
+function addSelect(group, name, title, labels, values=labels.map((_,i)=>i)) {
   const label = document.createElement('label');
   label.textContent = title;
   const select = document.createElement('select');
   select.name = name;
-  labels.forEach((value,i)=>select.add(new Option(value,i)));
+  labels.forEach((value,i)=>select.add(new Option(value,values[i])));
   select.value = defaults[name];
   label.append(select);
   document.getElementById(group).prepend(label);
@@ -80,6 +80,7 @@ for (const [group, prefix] of [['gearFields','gear'],['shaftFields','shaft']]) {
   addSelect(group,prefix+'Finish','Acabado',finishes.map(row=>row[0]));
   addSelect(group,prefix+'Steel','Acero',steels.map(steel=>steel.label));
 }
+addSelect('shaftFields','kc','Factor de carga · tabla de clase',shaftLoadFactors.map(item=>item.label),shaftLoadFactors.map(item=>item.value));
 addSelect('bearingFields','bearingType','Tipo · serie 02',['Ranura profunda','Contacto angular']);
 
 addSelect('springFields','wire','Alambre · tablas 10-4 y 10-5',springWires.map(wire=>wire.name));
@@ -121,39 +122,197 @@ for (const {label, columns, rows} of referenceTables) {
   tables.append(group);
 }
 
-const stageInput=document.querySelector('#edit-stage');
-const memoryStage=document.querySelector('#memory-stage');
 const overview=document.querySelector('#overview');
+const stageTitle=document.querySelector('#stage-title');
+const stageResult=document.querySelector('#stage-result');
+const stageMaterials=document.querySelector('#stage-material');
+const stageCalculation=document.querySelector('#stage-calculation');
+const stages=[
+  ['Potencia y velocidades','powerFields'],
+  ['Poleas y banda','beltFields'],
+  ['Engranes','gearFields'],
+  ['Equilibrio de la flecha','balanceFields'],
+  ['Dimensionamiento de la flecha','shaftFields'],
+  ['Rodamientos','bearingFields'],
+  ['Brazo tensor y resorte','springFields'],
+  ['Diagramas de la propuesta',null]
+];
 let current;
 let edited=false;
-let activeStage='etapa-1';
+let activeStage=1;
+let openCalculation=0;
+
+function formValues() {
+  return Object.fromEntries(Array.from(new FormData(form),([key,value])=>[key,value===''?NaN:Number(value)]));
+}
 
 function selectEditor(id) {
-  stageInput.value=id;
   for(const fieldset of form.querySelectorAll('fieldset')) fieldset.hidden=fieldset.id!==id;
 }
 
-function showMemoryStep(id) {
-  if (!memory.querySelector('#'+id)) id=memoryStage.options[0]?.value;
-  activeStage=id||'etapa-1';
-  memoryStage.value=activeStage;
-  for(const section of memory.children) section.hidden=section.id!==activeStage;
-}
-
-function showView(){
+function showView() {
   const hash=location.hash.slice(1);
-  const stage=/^etapa-[1-8]$/.test(hash);
-  const view=stage?'memoria':(['datos','memoria','catalogos'].includes(hash)?hash:'resultados');
+  const stageMatch=/^etapa-([1-8])$/.exec(hash);
+  const stageView=Boolean(stageMatch)||hash==='datos'||hash==='memoria';
+  const view=stageView?'datos':hash==='catalogos'?'catalogos':'resultados';
+  if(stageMatch) activeStage=Number(stageMatch[1]);
+  if(hash==='datos'&&activeStage===8) activeStage=1;
   for(const panel of document.querySelectorAll('.view')) panel.hidden=panel.id!==view;
+  const selected=stageView?'etapa-'+activeStage:view;
   for(const link of document.querySelectorAll('.views [data-view]')){
-    if(link.dataset.view===view) link.setAttribute('aria-current','page');
+    if(link.dataset.view===selected) link.setAttribute('aria-current','page');
     else link.removeAttribute('aria-current');
   }
-  showMemoryStep(stage?hash:activeStage);
+  if(!stageView) return;
+
+  const [title,fieldset]=stages[activeStage-1];
+  stageTitle.textContent=title;
+  form.hidden=!fieldset;
+  selectEditor(fieldset);
+  stageResult.hidden=!fieldset;
+  const stageKey='etapa-'+activeStage;
+  let hasCalculation=false;
+  for(const section of memory.children){
+    section.hidden=section.id!==stageKey;
+    if(!section.hidden) hasCalculation=true;
+  }
+  stageCalculation.hidden=!hasCalculation;
+  stageCalculation.querySelector('summary').textContent=activeStage===8?'Ver diagramas':'Desarrollo del cálculo';
+  if(openCalculation!==activeStage){
+    stageCalculation.open=activeStage===8||hash==='memoria';
+    openCalculation=activeStage;
+  }
+  renderStageResult();
+  renderStageMaterial();
 }
 
-stageInput.addEventListener('change',()=>selectEditor(stageInput.value));
-memoryStage.addEventListener('change',()=>{location.hash=memoryStage.value;});
+function metric(value,unit,digits=2){
+  return Number.isFinite(value)?number(value,digits)+(unit?' '+unit:''):'—';
+}
+
+function stageFacts(result,stage){
+  const {power,belt,design,spring}=result;
+  const minimum=values=>values?.length?Math.min(...values):undefined;
+  switch(stage){
+    case 1: return power&&[
+      ['Potencia mecánica requerida',metric(power.motorPower/1000,'kW')],
+      ['Velocidad de la flecha',metric(power.shaftRpm,'rpm',0)],
+      ['Velocidad de salida',metric(power.outRpm,'rpm',0)]
+    ];
+    case 2: return belt&&[
+      ['Ancho propuesto',metric(belt.selected*1000,'mm',0)],
+      ['Diámetro del rodillo',metric(belt.rollerDiameter,'mm',0)],
+      ['Demanda de tensión',metric(belt.review.demandImperial,'lbf/in')]
+    ];
+    case 3: return design&&[
+      ['Ancho de cara',metric(design.faceMm,'mm',0)],
+      ['Módulo',metric(design.module,'mm')],
+      ['Factor mínimo a fatiga',metric(minimum(design.gearFatigue),'')]
+    ];
+    case 4: return design&&[
+      ['Reacción máxima · apoyo 1',metric(design.loads[0]/1000,'kN')],
+      ['Reacción máxima · apoyo 4',metric(design.loads[1]/1000,'kN')],
+      ['Momento flector máximo',metric(Math.max(...design.moments),'N·m')]
+    ];
+    case 5: return design&&[
+      ['Diámetro comercial',metric(design.diameter,'mm',0)],
+      ['Diámetro continuo',metric(design.continuous,'mm')],
+      ['Índice mínimo de Hencky–Marin',metric(minimum(design.shaftFatigue),'')]
+    ];
+    case 6: return design&&[
+      ['Diámetro de agujero',metric(design.diameter,'mm',0)],
+      ['Vida L10 · apoyo 1',metric(design.bearingLife?.[0],'h',0)],
+      ['Vida L10 · apoyo 4',metric(design.bearingLife?.[1],'h',0)]
+    ];
+    case 7: return spring&&[
+      ['Diámetro de alambre',metric(spring.selected,'mm')],
+      ['Carga de trabajo',metric(spring.fmin,'',1)+'–'+metric(spring.fmax,'N',1)],
+      ['Factor mínimo estático',metric(minimum(spring.elasticFactors),'')]
+    ];
+    default: return null;
+  }
+}
+
+function stageCaution(result,stage){
+  if(stage===2&&result.belt) return 'Pendiente de servicio: la tabla 17-2 da el límite a 600 ft/min. La banda trabaja a '+metric(result.belt.review.operatingFpm,'ft/min',0)+' y pasa por un rodillo de contraflexión.';
+  if(stage===3&&result.design) return 'La comprobación a fatiga usa el método de los apuntes y los factores de Lewis y entalle propuestos. Coteja esos factores con el perfil real del diente.';
+  if(stage===5&&result.design) return 'Se verifica la fatiga con la convención de Hencky–Marin de la libreta. El multiplicador de carga equivalente es la raíz cuadrada del índice. La aplicabilidad de los datos del acero depende del diámetro y del estado del material.';
+  if(stage===6&&result.design) return 'La vida L10 comprueba fatiga de contacto con las cargas calculadas y las capacidades de la tabla 11-2.';
+  if(stage===7&&result.spring) return 'Fatiga del cuerpo y los ganchos pendiente. Se calculan los esfuerzos alternantes y medios, pero las tablas 10-4 y 10-5 no incluyen resistencia cíclica.';
+  return '';
+}
+
+function renderStageResult() {
+  stageResult.replaceChildren();
+  if(!current||activeStage===8) return;
+  const facts=stageFacts(current,activeStage);
+  if(!facts) return;
+  if(edited){
+    const stale=document.createElement('p');
+    stale.className='note';
+    stale.textContent='Resultados de la última corrida. Pulsa Calcular para aplicar los cambios.';
+    stageResult.append(stale);
+  }
+  const list=document.createElement('dl');
+  list.className='stage-facts';
+  for(const [label,value] of facts){
+    const item=document.createElement('div');
+    item.className='fact';
+    const term=document.createElement('dt');
+    term.textContent=label;
+    const definition=document.createElement('dd');
+    definition.textContent=value;
+    item.append(term,definition);
+    list.append(item);
+  }
+  stageResult.append(list);
+  const caution=stageCaution(current,activeStage);
+  if(caution){
+    const item=document.createElement('p');
+    item.className='note';
+    item.textContent=caution;
+    stageResult.append(item);
+  }
+}
+
+function renderStageMaterial() {
+  const cards=stageMaterial(activeStage,formValues(),edited?null:current);
+  stageMaterials.replaceChildren();
+  stageMaterials.hidden=!cards.length;
+  if(!cards.length) return;
+
+  const heading=document.createElement('h3');
+  heading.textContent='Propiedades de catálogo';
+  stageMaterials.append(heading);
+  for(const {title,source,rows,note} of cards){
+    const card=document.createElement('section');
+    card.className='material-card';
+    const name=document.createElement('h4');
+    name.textContent=title;
+    const reference=document.createElement('p');
+    reference.className='material-source';
+    reference.textContent=source;
+    const list=document.createElement('dl');
+    list.className='material-grid';
+    for(const [label,value] of rows){
+      const term=document.createElement('dt');
+      term.textContent=label;
+      const definition=document.createElement('dd');
+      definition.textContent=value;
+      const item=document.createElement('div');
+      item.append(term,definition);
+      list.append(item);
+    }
+    card.append(name,reference,list);
+    if(note){
+      const notice=document.createElement('p');
+      notice.className='material-note';
+      notice.textContent=note;
+      card.append(notice);
+    }
+    stageMaterials.append(card);
+  }
+}
 window.addEventListener('hashchange',showView);
 
 function renderOverview(result) {
@@ -170,8 +329,9 @@ function renderOverview(result) {
     ['Potencia requerida',number(power.motorPower/1000,2)+' kW',number(power.outRpm)+' rpm a la salida',1],
     ['Ancho de banda',number(1000*belt.selected)+' mm','Rodillo de '+number(belt.rollerDiameter)+' mm',2],
     ['Engranes',number(design.faceMm)+' mm de cara','Módulo '+number(design.module)+' mm',3],
+    ['Equilibrio de la flecha',metric(Math.max(...design.moments),'N·m'),'Momento flector máximo',4],
     ['Flecha',number(design.diameter)+' mm','Diámetro comercial',5],
-    ['Rodamientos',number(design.diameter)+' mm de agujero','Reacciones máximas: '+design.loads.map(load=>number(load/1000,2)).join(' y ')+' kN',6],
+    ['Rodamientos',number(design.diameter)+' mm de agujero','Vida mínima L10: '+metric(Math.min(...design.bearingLife),'h',0),6],
     ['Resorte',number(spring.selected)+' mm de alambre',number(spring.fmin,1)+' a '+number(spring.fmax,1)+' N',7]
   ];
   const grid=document.createElement('div');
@@ -204,7 +364,6 @@ function renderOverview(result) {
 
 function render(entries) {
   memory.replaceChildren();
-  memoryStage.replaceChildren();
   let index = 0;
   let section = memory;
   let target = memory;
@@ -212,7 +371,6 @@ function render(entries) {
     if (type === 'section') {
       section = document.createElement('section');
       section.id = 'etapa-' + (++index);
-      memoryStage.add(new Option(value,section.id));
       memory.append(section);
       target = section;
     } else if (type === 'heading') {
@@ -295,15 +453,14 @@ function tex(entries) {
 function run() {
   const invalid=Array.from(form.elements).find(input=>input.willValidate&&!input.validity.valid);
   if(invalid){
-    selectEditor(invalid.closest('fieldset').id);
-    location.hash='datos';
+    activeStage=stages.findIndex(([,id])=>id===invalid.closest('fieldset').id)+1;
+    location.hash='etapa-'+activeStage;
     showView();
     invalid.focus();
     invalid.reportValidity();
     return false;
   }
-  const values=Object.fromEntries(new FormData(form));
-  current=calculate(Object.fromEntries(Object.entries(values).map(([key,value])=>[key,Number(value)])));
+  current=calculate(formValues());
   edited=false;
   render(current.entries);
   renderOverview(current);
@@ -316,11 +473,15 @@ function run() {
 }
 form.addEventListener('submit',event=>{
   event.preventDefault();
-  if(run()) location.hash='resultados';
+  run();
 });
 form.addEventListener('input',event=>{
-  if(!event.target.name||edited) return;
+  if(!event.target.name) return;
+  const firstEdit=!edited;
   edited=true;
+  renderStageMaterial();
+  if(!firstEdit) return;
+  renderStageResult();
   updateDownloads();
   if(!generatingPdf) pdfStatus.textContent='';
   calculationStatus.dataset.state='edited';
@@ -328,7 +489,7 @@ form.addEventListener('input',event=>{
 });
 document.querySelector('#restore').addEventListener('click',()=>{
   for(const [key,value] of Object.entries(defaults)) form.elements.namedItem(key).value=value;
-  if(run()) location.hash='resultados';
+  run();
 });
 function updateDownloads(){
   const available=Boolean(current?.spring)&&!edited;
