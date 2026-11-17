@@ -163,7 +163,7 @@ function finishDesign(c, power, belt, add, check) {
     eq(math`M_{2${axis}}=(${n(r1)})(${n(x2/1000)})=${moment(m2)}`);
     eq(math`M_{3${axis}}=(${n(r1)})(${n(x3/1000)})+(${n(g)})(${n((x3-x2)/1000)})=${moment(m3)}`);
     eq(math`\sum F_{${axis}}=${force(zero(r1+r4+g+b))};\quad M_{4${axis}}=${moment(zero((r1*span+g*(span-x2)+b*(span-x3))/1000))}`);
-    return {r1,r4,m2,m3};
+    return {r1,r4,m2,m3,v:[r1,r1+g,r1+g+b],m:[0,m2,m3,0]};
   });
   const resultant=(key)=>Math.hypot(...planes.map(plane=>plane[key]));
   const envelope=belt.states.map(state=>{
@@ -297,5 +297,5 @@ function finishDesign(c, power, belt, add, check) {
     eq(math`r_{filete}=${mm(fillet)}>r_{\max}=${mm(rmax)}`);
     note('Interferencia de filete. Propuesta de montaje: espaciador de '+n(spacer)+' mm, chaflán interior de al menos '+n(chamfer)+' mm y radio de borde de 1 mm. Verificar el detalle en el plano.');
   }
-  return {module,faceMm, wt, wr, loads, moments, continuous, diameter,kd,ke};
+  return {module,faceMm, wt, wr, loads, moments, continuous, diameter,planes,kd,ke};
 }

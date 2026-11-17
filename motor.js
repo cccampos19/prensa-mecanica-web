@@ -82,7 +82,8 @@ function calculate(c) {
     check(Number.isFinite(c.angle), 'Ingresa la orientación de la carga.');
     const row = catalog[c.belt];
     check(row, 'Selecciona una banda del catálogo.');
-    const [name, thicknessIn, minimumIn, allowableIn, weightIn, friction] = row;
+    const [name, thicknessIn, minimumIn, allowableIn, listedWeight, friction] = row;
+    const weightIn = Array.isArray(listedWeight) ? Math.max(...listedWeight) : listedWeight;
     check(minimumIn, name + (name.includes('redondo') ? ' requiere un método de banda redonda.' : ' requiere consultar el diámetro mínimo en la tabla 17-3.'));
     const thickness = thicknessIn * inch;
     const density = weightIn * lbf / inch ** 3 / gravity;
@@ -93,8 +94,33 @@ function calculate(c) {
     const small = Math.min(driver, driven);
     const tightAngle=c.angle*Math.PI/180+Math.asin((driven-driver)/(2*c.centers));
     check(c.springRate>0,'La rigidez propuesta del resorte debe ser positiva.');
-    check(2*c.idlerRadius>=1000*minimumIn*inch, "El rodillo queda por debajo del diámetro mínimo tabulado para la banda.");
-    const geometry=tensorGeometry(c,driven,driver,tightAngle,check);
+    add('heading','Selección del diámetro del rodillo');
+    const minRoller=1000*minimumIn*inch;
+    const proposed=2*c.idlerRadius;
+    const alternatives=[];
+    for(let trial=Math.ceil(minRoller/2)*2;trial<300-driver*1000;trial+=2) {
+      if(trial!==proposed) alternatives.push(trial);
+    }
+    alternatives.sort((a,b)=>Math.abs(a-proposed)-Math.abs(b-proposed));
+    const candidates=[proposed,...alternatives];
+    let geometry, rollerDiameter, rejection;
+    for(const trial of candidates){
+      if(trial<minRoller){
+        add('text','Rodillo propuesto de '+n(trial)+' mm. Inferior al mínimo de '+n(minRoller)+' mm de tabla 17-2.');
+        continue;
+      }
+      try {
+        geometry=tensorGeometry({...c,idlerRadius:trial/2},driven,driver,tightAngle,check);
+      } catch(error) {
+        rejection=error.message;
+        add('text','Rodillo de '+n(trial)+' mm. '+rejection);
+        continue;
+      }
+      rollerDiameter=trial;
+      add('text','Rodillo de '+n(trial)+' mm. Cumple diámetro mínimo y contacto en el recorrido.');
+      break;
+    }
+    check(geometry,'La selección del rodillo no tiene solución geométrica. '+(rejection||'El mínimo de tabla excede el espacio disponible.'));
     add('text','El texto del enunciado fija 2100 rpm y 18000 kgf·cm para el caso de la tarea. El plano se usa para la geometría y muestra rotulados 1800 rpm y 15000 kgf·cm.');
     const nominal=geometry[50], smallWrap=nominal.wrapMotor, largeWrap=nominal.wrapDriven;
     const length=nominal.length;
@@ -108,7 +134,7 @@ function calculate(c) {
     eq(math`S_{perm}=${display(allowableIn,'lbf/in')}(4.448221615/0.0254)=${display(allowable,'N/m')}`);
     eq(math`\rho=\frac{\gamma}{g}=\frac{${n(weightIn,5)}(4.448221615)}{(0.0254)^3(9.80665)}=${dual(density,'kg/m^3',inch**3/.45359237,'lb/in^3')}`);
     add('note', 'La tabla 17-2 da la tensión permisible a 600 ft/min. Se conserva la aplicación del ejemplo de clase a otra velocidad. Falta comprobar este criterio a la velocidad real.');
-    if (name.startsWith('Cuero')) add('note', 'Se toma 0.040 lbf/in³ como peso específico representativo del rango de catálogo.');
+    if (name.startsWith('Cuero')) add('note', 'Se utiliza el extremo superior de 0.045 lbf/in³ del intervalo de la tabla 17-2 para el cuero.');
     add('heading', 'Geometría y velocidad de la banda');
     add('note','Se comprueba el diámetro del rodillo con el mínimo de tabla 17-2 como referencia. La autorización de flexión inversa y la tensión admisible a la velocidad real requieren datos del fabricante.');
     add('text', 'Banda abierta, relación de tensiones con fuerza centrífuga y balance de potencia (apuntes, pp. 40–47).');
@@ -184,17 +210,19 @@ function calculate(c) {
     eq(math`F_y=F_1\cos\gamma_t+F_2\cos\gamma_{f,c}=${n(mid.tight)}\cos(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\cos(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fy)}`);
     eq(math`F_z=F_1\sin\gamma_t+F_2\sin\gamma_{f,c}=${n(mid.tight)}\sin(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\sin(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fz)}`);
     eq(math`|\mathbf F|=\sqrt{(${n(mid.fy)})^2+(${n(mid.fz)})^2}=${force(Math.hypot(mid.fy,mid.fz))}`);
-    belt = {selected,speed,length,capacity,...final,fy:mid.fy,fz:mid.fz};
+    belt = {selected,speed,length,capacity,...final,fy:mid.fy,fz:mid.fz,rollerDiameter,driver,driven};
     const design = finishDesign(c, power, belt, add, check);
     add('section','Brazo tensor y resorte de tensión');
-    const spring = springDesign(c, belt, design.kd, design.ke, add, check);
+    const spring = springDesign(c, belt, add, check);
     add('heading','Conclusión y especificaciones de la propuesta');
     add('text','Motor nominal de '+c.nominal+' kW para '+n(motorPower/1000)+' kW requeridos. Banda '+name+' de '+n(selected*1000)+' mm, longitud nominal '+n(length)+' m y poleas de '+n(driver*1000)+' y '+n(driven*1000)+' mm.');
     add('text','Engranes '+c.np+'/'+c.ng+' dientes, '+steels[c.gearSteel].label+', módulo '+n(design.module)+' mm y cara '+n(design.faceMm)+' mm. Flecha '+steels[c.shaftSteel].label+' de '+n(design.diameter)+' mm y rodamientos serie 02 de '+n(design.diameter)+' mm de agujero.');
-    add('text','Resorte ASTM A228 de '+n(spring.selected)+' mm de alambre y '+n(spring.free)+' mm de longitud libre, con factor mínimo de fatiga de gancho '+n(Math.min(...spring.hookFat))+'. Las comprobaciones se refieren a las hipótesis y al ciclo de diseño de esta memoria.');
+    add('text','Resorte '+spring.name+' de '+n(spring.selected)+' mm de alambre y '+n(spring.free)+' mm de longitud libre. Verificación cíclica del resorte pendiente de los datos de resistencia de las tablas.');
     add('heading','Fuentes');
     add('text','Enunciado Prensa mecánica, pp. 2–3. Libreta de Diseño de Elementos de Máquinas, pp. 9–22, 28–60. Tablas de clase A-20, A-21, 6-2, 6-4, 10-4, 10-5, 11-1, 11-2 y 17-2.');
-    add('text','Budynas y Nisbett, Diseño en ingeniería mecánica de Shigley, 10.ª ed., cap. 10, sección de resortes de tensión y tabla 10-8 (Associated Spring).');
+    add('text','Budynas y Nisbett, Diseño en ingeniería mecánica de Shigley, 10.ª ed., cap. 10, ecuaciones geométricas de esfuerzo en el gancho.');
+    add('section','Diagramas de la propuesta');
+    for(const diagram of designDiagrams(c,power,belt,design,spring)) add('diagram',diagram);
     return {entries, power, belt, design, spring, iterations};
   } catch (error) {
     add('note', error.message);

@@ -13,7 +13,7 @@ const defaults = {
   shaftSteel:17, shaftFinish:1, shaftStart:40, fillet:.1, kc:.59, ktFlex:1.7,
   ktTors:1.4, shaftFat:2, shaftStatic:2, temperature:20, reliability:99,
   bearingType:0, life:20000, bearingStatic:1.5,
-  wire:0, travel:20, idlerRadius:56, armAngle:-14, springRate:4, preload:35, springIndex:10, springSafety:2, hookRadius:2
+  wire:0, travel:20, idlerRadius:56, armAngle:-14, springRate:5.5, preload:35, springIndex:10, springSafety:2, hookRadius:2
 };
 const fields = {
   powerFields: [
@@ -79,7 +79,7 @@ for (const [group, prefix] of [['gearFields','gear'],['shaftFields','shaft']]) {
 }
 addSelect('bearingFields','bearingType','Tipo · serie 02',['Ranura profunda','Contacto angular']);
 
-addSelect('springFields','wire','Alambre · tablas 10-4 y 10-5',springWires.slice(0,1).map(wire=>wire.name));
+addSelect('springFields','wire','Alambre · tablas 10-4 y 10-5',springWires.map(wire=>wire.name));
 
 const select = form.elements.belt;
 catalog.forEach(([name, , minimum], index) => {
@@ -146,6 +146,22 @@ function render(entries) {
       target.className = 'iteration';
       section.append(target);
     }
+    if (type === 'diagram') {
+      const figure = document.createElement('figure');
+      figure.className = 'design-diagram';
+      const title = document.createElement('h3');
+      title.textContent = value.title;
+      const canvas = document.createElement('canvas');
+      canvas.width=840; canvas.height=250;
+      canvas.setAttribute('role','img');
+      canvas.setAttribute('aria-label',value.title+'. '+value.caption);
+      const caption = document.createElement('figcaption');
+      caption.textContent=value.caption;
+      figure.append(title,canvas,caption);
+      target.append(figure);
+      paintDiagram(canvas,value);
+      continue;
+    }
     const tag = {section:'h2', heading:'h3', iteration:'h4', eq:'div'}[type] || 'p';
     const element = document.createElement(tag);
     if (type === 'eq') {
@@ -179,6 +195,7 @@ function tex(entries) {
     '\\usepackage[T1]{fontenc}',
     '\\usepackage[spanish,es-minimal]{babel}',
     '\\usepackage{amsmath}',
+    '\\usepackage{pict2e}',
     '\\usepackage[a4paper,margin=20mm]{geometry}',
     '\\allowdisplaybreaks',
     '\\setlength{\\parskip}{0.45em}',
@@ -188,6 +205,7 @@ function tex(entries) {
     '\\begin{document}',
     '\\maketitle',
     ...entries.map(({type, value}) => {
+      if (type === 'diagram') return diagramTex(value,escape);
       if (type === 'eq') {
         return '\\[\n' + formatEquation(value) + '\n\\]';
       }
@@ -204,7 +222,7 @@ function run() {
   render(current.entries);
   calculationStatus.textContent = current.error
     ? 'Propuesta incompleta. Revisa la anotación en la memoria.'
-    : 'Memoria completa · siete etapas calculadas.';
+    : 'Siete etapas calculadas · revisa las verificaciones pendientes.';
   download.disabled = !current.spring;
 }
 form.addEventListener('submit', event => {

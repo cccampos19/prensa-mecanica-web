@@ -1,7 +1,7 @@
 'use strict';
 
 // Transcripciones del proyecto de clase.
-const catalog = [["Cuero 1 capa 11/64", 0.171875, 3.0, 30.0, 0.04, 0.4, null, "plana"], ["Cuero 1 capa 13/64", 0.203125, 3.5, 33.0, 0.04, 0.4, null, "plana"], ["Cuero 2 capas 18/64", 0.28125, 4.5, 41.0, 0.04, 0.4, null, "plana"], ["Cuero 2 capas 20/64", 0.3125, 6.0, 50.0, 0.04, 0.4, null, "plana"], ["Cuero 2 capas 23/64", 0.359375, 9.0, 60.0, 0.04, 0.4, null, "plana"], ["Poliamida F-0", 0.03, 0.6, 10.0, 0.035, 0.5, null, "plana"], ["Poliamida F-1", 0.05, 1.0, 35.0, 0.035, 0.5, null, "plana"], ["Poliamida F-2", 0.07, 2.4, 60.0, 0.051, 0.5, null, "plana"], ["Poliamida A-2", 0.11, 2.4, 60.0, 0.037, 0.8, null, "plana"], ["Poliamida A-3", 0.13, 4.3, 100.0, 0.042, 0.8, null, "plana"], ["Poliamida A-4", 0.2, 9.5, 175.0, 0.039, 0.8, null, "plana"], ["Poliamida A-5", 0.25, 13.5, 275.0, 0.039, 0.8, null, "plana"], ["Uretano plana 0.50", 0.062, null, 5.2, 0.0415, 0.7, 0.5, "plana"], ["Uretano plana 0.75", 0.078, null, 9.8, 0.0415, 0.7, 0.75, "plana"], ["Uretano plana 1.25", 0.09, null, 18.9, 0.0415, 0.7, 1.25, "plana"], ["Uretano redonda 1/4", 0.25, null, 8.3, 0.0415, 0.7, null, "redonda"], ["Uretano redonda 3/8", 0.375, null, 18.6, 0.0415, 0.7, null, "redonda"], ["Uretano redonda 1/2", 0.5, null, 33.0, 0.0415, 0.7, null, "redonda"], ["Uretano redonda 3/4", 0.75, null, 74.3, 0.0415, 0.7, null, "redonda"]];
+const catalog = [["Cuero 1 capa 11/64", 0.171875, 3.0, 30.0, [0.035,0.045], 0.4, null, "plana"], ["Cuero 1 capa 13/64", 0.203125, 3.5, 33.0, [0.035,0.045], 0.4, null, "plana"], ["Cuero 2 capas 18/64", 0.28125, 4.5, 41.0, [0.035,0.045], 0.4, null, "plana"], ["Cuero 2 capas 20/64", 0.3125, 6.0, 50.0, [0.035,0.045], 0.4, null, "plana"], ["Cuero 2 capas 23/64", 0.359375, 9.0, 60.0, [0.035,0.045], 0.4, null, "plana"], ["Poliamida F-0", 0.03, 0.6, 10.0, 0.035, 0.5, null, "plana"], ["Poliamida F-1", 0.05, 1.0, 35.0, 0.035, 0.5, null, "plana"], ["Poliamida F-2", 0.07, 2.4, 60.0, 0.051, 0.5, null, "plana"], ["Poliamida A-2", 0.11, 2.4, 60.0, 0.037, 0.8, null, "plana"], ["Poliamida A-3", 0.13, 4.3, 100.0, 0.042, 0.8, null, "plana"], ["Poliamida A-4", 0.2, 9.5, 175.0, 0.039, 0.8, null, "plana"], ["Poliamida A-5", 0.25, 13.5, 275.0, 0.039, 0.8, null, "plana"], ["Uretano plana 0.50", 0.062, null, 5.2, 0.0415, 0.7, 0.5, "plana"], ["Uretano plana 0.75", 0.078, null, 9.8, 0.0415, 0.7, 0.75, "plana"], ["Uretano plana 1.25", 0.09, null, 18.9, 0.0415, 0.7, 1.25, "plana"], ["Uretano redonda 1/4", 0.25, null, 8.3, 0.0415, 0.7, null, "redonda"], ["Uretano redonda 3/8", 0.375, null, 18.6, 0.0415, 0.7, null, "redonda"], ["Uretano redonda 1/2", 0.5, null, 33.0, 0.0415, 0.7, null, "redonda"], ["Uretano redonda 3/4", 0.75, null, 74.3, 0.0415, 0.7, null, "redonda"]];
 const referenceTables = [
   {
     "label": "Tabla 17-2 · Bandas",
@@ -22,7 +22,7 @@ const referenceTables = [
         null,
         3.0,
         30.0,
-        0.04,
+        "0.035–0.045",
         0.4,
         "plana"
       ],
@@ -32,7 +32,7 @@ const referenceTables = [
         null,
         3.5,
         33.0,
-        0.04,
+        "0.035–0.045",
         0.4,
         "plana"
       ],
@@ -42,7 +42,7 @@ const referenceTables = [
         null,
         4.5,
         41.0,
-        0.04,
+        "0.035–0.045",
         0.4,
         "plana"
       ],
@@ -52,7 +52,7 @@ const referenceTables = [
         null,
         6.0,
         50.0,
-        0.04,
+        "0.035–0.045",
         0.4,
         "plana"
       ],
@@ -62,7 +62,7 @@ const referenceTables = [
         null,
         9.0,
         60.0,
-        0.04,
+        "0.035–0.045",
         0.4,
         "plana"
       ],
