@@ -20,6 +20,27 @@ function reportEntries(result) {
   return [...result.entries,{type:'section',value:'Bitácora de decisiones'},...log];
 }
 
+function runSummary(result) {
+  if(result.error) return plainNumberNotation(result.error);
+  const [label,value,unit,digits]=result.metrics[0];
+  return label+' · '+worksheetNumber(value,unit,digits);
+}
+
+function reportSession(runs) {
+  const comparison={type:'data',value:{
+    headers:['Corrida','Resultado de la propuesta'],
+    rows:runs.map(({result})=>['Corrida '+result.run,runSummary(result)])
+  }};
+  const worksheets=runs.flatMap(({result})=>{
+    const [first,...steps]=reportEntries(result);
+    return [
+      {type:'section',value:'Corrida '+result.run+' · '+first.value},
+      ...steps.map(step=>step.type==='section'?{...step,type:'heading'}:step)
+    ];
+  });
+  return [{type:'section',value:'Comparación de corridas'},comparison,...worksheets];
+}
+
 function dataTex({headers,rows},escape) {
   const header=headers.map(value=>'\\textbf{'+escape(value)+'}').join(' & ')+' \\\\ \\hline';
   const body=rows.map(row=>row.map(escape).join(' & ')+' \\\\');

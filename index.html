@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
   <link rel="stylesheet" href="interfaz.css">
-  <link rel="stylesheet" href="taller.css?v=libreta1">
+  <link rel="stylesheet" href="taller.css?v=libreta2">
 </head>
 <body>
 <a class="skip" href="#contenido">Ir al contenido</a>
@@ -65,6 +65,10 @@
           </header>
           <div id="results"></div>
           <div class="export-actions">
+            <label id="include-runs-option" hidden>
+              <input id="include-runs" type="checkbox" checked>
+              Incluir todas las corridas de esta sesión
+            </label>
             <button type="button" id="download-pdf" disabled>Descargar PDF</button>
             <button type="button" class="secondary" id="download" disabled>Descargar .tex</button>
             <span id="export-status" role="status"></span>
@@ -103,8 +107,12 @@
 <script src="materiales.js"></script>
 <script src="componentes.js?v=libreta1"></script>
 <script src="libreta-engranes.js?v=libreta1"></script>
-<script src="memoria.js?v=libreta1"></script>
+<script src="libreta-flecha.js?v=libreta2"></script>
+<script src="libreta-potencia-banda.js?v=libreta2"></script>
+<script src="libreta-apoyos.js?v=libreta2"></script>
+<script src="libreta-resorte.js?v=libreta2"></script>
+<script src="memoria.js?v=libreta2"></script>
 <script src="memoria-pdf.js?v=libreta1"></script>
-<script src="app.js?v=libreta1"></script>
+<script src="app.js?v=libreta2"></script>
 </body>
 </html>

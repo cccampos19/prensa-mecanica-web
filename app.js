@@ -19,7 +19,18 @@ const runList=document.querySelector('#run-list');
 const notebookButton=document.querySelector('#notebook-example');
 const texButton=document.querySelector('#download');
 const pdfButton=document.querySelector('#download-pdf');
+const includeRunsOption=document.querySelector('#include-runs-option');
+const includeRuns=document.querySelector('#include-runs');
 const exportStatus=document.querySelector('#export-status');
+const notebookExercises={
+  engranes:calculateNotebookGears,
+  banda:calculateNotebookBelt,
+  flecha:calculateNotebookShaft,
+  equilibrio:calculateNotebookBalance,
+  rodamientos:calculateNotebookBearings,
+  resorte:calculateNotebookSpring,
+  potencia:calculateNotebookPower
+};
 const states=new Map();
 let activeKey='engranes';
 let pdfInProgress=false;
@@ -186,8 +197,9 @@ function renderMemory(entries) {
 }
 
 function updateDownloads() {
-  const entries=states.get(activeKey)?.result?.entries;
-  const available=Boolean(entries?.length);
+  const state=states.get(activeKey);
+  const available=Boolean(state?.result?.entries.length);
+  includeRunsOption.hidden=!available||state.result.notebook||state.runs.length<2;
   texButton.disabled=!available;
   pdfButton.disabled=!available||pdfInProgress;
 }
@@ -205,7 +217,7 @@ function renderResults(result) {
     memoryHost.replaceChildren();
     return;
   }
-  worksheetTitle.textContent=result.notebook?'Ejercicio de la libreta · Engranes':
+  worksheetTitle.textContent=result.notebook?result.entries[0].value:
     'Corrida '+result.run+' · '+components[activeKey].title;
   if(result.error){
     resultStatus.textContent='Revisar datos';
@@ -239,7 +251,7 @@ function renderRunHistory(state) {
     const button=node('button','Corrida '+run.result.run,'secondary');
     button.type='button';
     button.setAttribute('aria-pressed',String(run.result===state.result));
-    button.append(node('small',run.result.error?'Revisar datos':'Calculada'));
+    button.append(node('small',run.result.error?'Revisar datos':runSummary(run.result)));
     button.addEventListener('click',()=>{
       state.values={...run.values};
       state.result=run.result;
@@ -292,7 +304,7 @@ function openModule() {
   activeKey=requested;
   const component=components[activeKey];
   const state=stateFor(activeKey);
-  notebookButton.hidden=activeKey!=='engranes';
+  notebookButton.hidden=!notebookExercises[activeKey];
   document.querySelector('#module-type').textContent=component.type;
   document.querySelector('#module-title').textContent=component.title;
   document.querySelector('#module-description').textContent=component.description;
@@ -355,8 +367,10 @@ form.addEventListener('submit',event=>{
 });
 
 notebookButton.addEventListener('click',()=>{
+  const exercise=notebookExercises[activeKey];
+  if(!exercise) return;
   const state=stateFor(activeKey);
-  state.result={...calculateNotebookGears(),notebook:true};
+  state.result={...exercise(),notebook:true};
   exportStatus.textContent='';
   renderResults(state.result);
   renderRunHistory(state);
@@ -375,34 +389,38 @@ function saveDocument(blob, filename) {
   setTimeout(()=>URL.revokeObjectURL(url),30000);
 }
 
-function filename(key,result,extension) {
-  const variant=result.notebook?'_libreta':result.run>1?'_corrida_'+result.run:'';
-  return 'memoria_'+key+variant+(result.error?'_revision':'')+'.'+extension;
-}
-
-function reportSubject(key,result) {
-  return result.notebook?'Ejercicio de engranes de la libreta':'Corrida '+result.run+' · '+components[key].title;
+function prepareReport(key,extension) {
+  const {result,runs}=stateFor(key);
+  if(!result) return null;
+  const all=!result.notebook&&runs.length>1&&includeRuns.checked;
+  const title=components[key].title;
+  const variant=all?'_corridas':result.notebook?'_libreta':result.run>1?'_corrida_'+result.run:'';
+  return {
+    entries:all?reportSession(runs):reportEntries(result),
+    subject:all?'Corridas · '+title:result.notebook?result.entries[0].value:'Corrida '+result.run+' · '+title,
+    filename:'memoria_'+key+variant+(!all&&result.error?'_revision':'')+'.'+extension
+  };
 }
 
 texButton.addEventListener('click',()=>{
-  const {result}=stateFor(activeKey);
-  if(!result) return;
-  const source=tex(reportEntries(result),reportSubject(activeKey,result));
-  saveDocument(new Blob([source],{type:'application/x-tex;charset=utf-8'}),filename(activeKey,result,'tex'));
+  const report=prepareReport(activeKey,'tex');
+  if(!report) return;
+  const source=tex(report.entries,report.subject);
+  saveDocument(new Blob([source],{type:'application/x-tex;charset=utf-8'}),report.filename);
 });
 
 pdfButton.addEventListener('click',async()=>{
   const key=activeKey;
-  const {result}=stateFor(key);
-  if(!result||pdfInProgress) return;
+  const report=prepareReport(key,'pdf');
+  if(!report||pdfInProgress) return;
   pdfInProgress=true;
   updateDownloads();
   exportStatus.textContent='Preparando PDF…';
   try{
-    const pdf=await buildMemoryPdf(reportEntries(result),formatEquation,(count,total)=>{
+    const pdf=await buildMemoryPdf(report.entries,formatEquation,(count,total)=>{
       if(activeKey===key) exportStatus.textContent='Generando PDF… '+Math.floor(100*count/total)+' %';
-    },reportSubject(key,result));
-    saveDocument(pdf,filename(key,result,'pdf'));
+    },report.subject);
+    saveDocument(pdf,report.filename);
     if(activeKey===key) exportStatus.textContent='PDF listo.';
   }catch(error){
     if(activeKey===key) exportStatus.textContent=error.message||'No se pudo generar el PDF.';

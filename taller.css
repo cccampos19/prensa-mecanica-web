@@ -106,6 +106,8 @@
 #material-cards p { color: var(--muted); font-size: .85rem }
 #material-cards .material-grid div { background: #e6efef }
 .form-actions,.export-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border) }
+#include-runs-option { flex-basis: 100%; display: flex; align-items: center; gap: 8px; font-size: .83rem; color: var(--muted) }
+#include-runs { width: 16px; min-width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: #196269 }
 button:not(:disabled):hover { background: #064f52 }
 button.secondary:not(:disabled):hover { background: #e9f3f2 }
 button.secondary { border-color: #9dbebc }
