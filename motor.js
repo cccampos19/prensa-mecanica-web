@@ -10,7 +10,8 @@ function number(value, digits = 3) {
     const [mantissa, exponent] = value.toExponential(4).split('e');
     return mantissa + '\\times 10^{' + Number(exponent) + '}';
   }
-  return Number(value.toFixed(digits)).toString();
+  const fixed = value.toFixed(digits);
+  return fixed.includes('.') ? fixed.replace(/0+$/, '').replace(/\.$/, '') : fixed;
 }
 
 const unit = name => '\\,\\mathrm{' + name + '}';
