@@ -73,7 +73,7 @@ function calculate(c) {
     const motorFits = c.nominal * 1000 >= motorPower;
     eq(math`P_{nom}=${kw(c.nominal*1000)}${motorFits ? '\\ge ' : '<'}P_m=${kw(motorPower)}`);
     check(motorFits, 'La potencia nominal propuesta es insuficiente.');
-    power = {shaftRpm, outRpm, motorPower};
+    power = {shaftRpm, outRpm, motorPower, shaftTorque};
 
     add('section', 'Poleas y banda plana');
     for (const [value, label] of [[c.pulley,'diámetro conducido'], [c.centers,'distancia entre centros'], [c.start,'ancho inicial']]) {
@@ -183,9 +183,10 @@ function calculate(c) {
     eq(math`|\mathbf F|=\sqrt{F_y^2+F_z^2}=\sqrt{(${n(fy)})^2+(${n(fz)})^2}=${force(Math.hypot(fy,fz))}`);
     add('note', 'La carga corresponde a las tensiones de la banda abierta. El efecto del brazo tensor y del resorte queda pendiente.');
     belt = {selected, speed, length, capacity, ...final, fy, fz};
-    return {entries, power, belt, iterations};
+    const design = finishDesign(c, power, belt, add, check);
+    return {entries, power, belt, design, iterations};
   } catch (error) {
     add('note', error.message);
-    return {entries, power, iterations, error: error.message};
+    return {entries, power, belt, iterations, error: error.message};
   }
 }

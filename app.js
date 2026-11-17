@@ -7,7 +7,12 @@ const download = document.querySelector('#download');
 const defaults = {
   rpm: 2100, ratio: 1.875, load: 18000, pinion: 160, gear: 640,
   gearEff: 97, beltEff: 94, nominal: 75, pulley: 300, centers: 0.90,
-  start: 200, angle: 60, belt: 9
+  start: 200, angle: 60, belt: 9,
+  np:20, ng:80, phi:20, yp:.322, yg:.426, ktGear:1.8, gearFat:2, gearStatic:4,
+  gearSteel:17, gearFinish:1, x2:120, x3:320, span:620,
+  shaftSteel:17, shaftFinish:1, shaftStart:40, fillet:.1, kc:.59, ktFlex:1.7,
+  ktTors:1.4, shaftFat:2, shaftStatic:2, temperature:20, reliability:99,
+  bearingType:0, life:20000, bearingStatic:1.5
 };
 const fields = {
   powerFields: [
@@ -19,7 +24,24 @@ const fields = {
   beltFields: [
     ['pulley','Diámetro de polea conducida (mm)'], ['centers','Distancia entre centros (m)'],
     ['start','Ancho inicial propuesto (mm)'], ['angle','Orientación de carga (°)']
-  ]
+  ],
+  gearFields: [
+    ['np','Dientes del piñón'], ['ng','Dientes de la rueda'], ['phi','Ángulo de presión (°)'],
+    ['yp','Lewis · piñón'], ['yg','Lewis · rueda'], ['ktGear','Kt en raíz del diente'],
+    ['gearFat','Seguridad a fatiga'], ['gearStatic','Seguridad estática']
+  ],
+  balanceFields: [
+    ['x2','Posición del piñón (mm)'], ['x3','Posición de la polea (mm)'],
+    ['span','Distancia entre apoyos (mm)']
+  ],
+  shaftFields: [
+    ['shaftStart','Diámetro inicial (mm)'], ['fillet','Radio de filete relativo r/d'],
+    ['kc','Factor de carga kc'], ['ktFlex','Kt en flexión'], ['ktTors','Kts en torsión'],
+    ['shaftFat','Seguridad a fatiga'], ['shaftStatic','Seguridad estática'],
+    ['temperature','Temperatura de servicio (°C) · flecha y engranes'],
+    ['reliability','Confiabilidad de fatiga (%) · flecha y engranes']
+  ],
+  bearingFields: [['life','Vida L10 solicitada (h)'], ['bearingStatic','Seguridad estática']]
 };
 
 for (const [group, definitions] of Object.entries(fields)) {
@@ -32,6 +54,22 @@ for (const [group, definitions] of Object.entries(fields)) {
     document.getElementById(group).append(label);
   }
 }
+function addSelect(group, name, title, labels) {
+  const label = document.createElement('label');
+  label.textContent = title;
+  const select = document.createElement('select');
+  select.name = name;
+  labels.forEach((value,i)=>select.add(new Option(value,i)));
+  select.value = defaults[name];
+  label.append(select);
+  document.getElementById(group).prepend(label);
+}
+for (const [group, prefix] of [['gearFields','gear'],['shaftFields','shaft']]) {
+  addSelect(group,prefix+'Finish','Acabado',finishes.map(row=>row[0]));
+  addSelect(group,prefix+'Steel','Acero',steels.map(steel=>steel.label));
+}
+addSelect('bearingFields','bearingType','Tipo · serie 02',['Ranura profunda','Contacto angular']);
+
 const select = form.elements.belt;
 catalog.forEach(([name, , minimum], index) => {
   select.add(new Option(minimum ? name : name + ' · método pendiente', index));
@@ -73,11 +111,21 @@ let current;
 
 function render(entries) {
   memory.replaceChildren();
+  const nav = document.createElement('nav');
+  nav.className = 'memory-nav';
+  nav.setAttribute('aria-label','Etapas de la memoria');
+  memory.append(nav);
+  let index = 0;
   let section = memory;
   let target = memory;
   for (const {type, value} of entries) {
     if (type === 'section') {
       section = document.createElement('section');
+      section.id = 'etapa-' + (++index);
+      const link = document.createElement('a');
+      link.href = '#' + section.id;
+      link.textContent = value;
+      nav.append(link);
       memory.append(section);
       target = section;
     } else if (type === 'heading') {
@@ -103,7 +151,7 @@ function render(entries) {
 
 function formatEquation(value) {
   const terms = value.split('=');
-  if (value.length <= 125 || terms.length < 3 || value.includes(';') ||
+  if (value.length <= 112 || terms.length < 3 || value.includes(';') ||
       value.includes('\\ge ') || value.includes('\\le ')) return value;
   return '\\begin{aligned}\n' + terms[0] + '&=' +
     terms.slice(1).join(' \\\\\n&=') + '\n\\end{aligned}';
@@ -141,8 +189,8 @@ function run() {
   render(current.entries);
   calculationStatus.textContent = current.error
     ? 'Propuesta incompleta. Revisa la anotación en la memoria.'
-    : 'Memoria calculada · ' + current.iterations.length + ' iteraciones de banda.';
-  download.disabled = !current.belt;
+    : 'Memoria completa · seis etapas calculadas.';
+  download.disabled = !current.design;
 }
 form.addEventListener('submit', event => {
   event.preventDefault();
