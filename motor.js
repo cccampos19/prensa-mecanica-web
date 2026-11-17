@@ -187,14 +187,26 @@ function calculate(c) {
     }
     add('heading', 'Selección y comprobación final');
     check(error < tolerance, 'El ancho no convergió después de 100 iteraciones.');
-    const selected = Math.ceil(width / .01) * .01;
-    eq(math`b_{elegido}=10\left\lceil\frac{${n(width*1000,6)}}{10}\right\rceil=${mm(selected)}`);
-    if (name.startsWith('Cuero') && [6,9].includes(minimumIn) && selected >= 8 * inch) {
-      const corrected = (minimumIn + 2) * inch;
-      eq(math`d_{min,corr}=d_{min}+2\,\mathrm{in}=${mm(corrected)}`);
-      check(Math.min(small,rollerDiameter/1000) >= corrected, 'La nota a de la tabla 17-2 exige aumentar 2 in el diámetro mínimo de esta banda de cuero ancha.');
+    const fitsWidth = candidate => !(name.startsWith('Cuero') && [6,9].includes(minimumIn) &&
+      candidate>=8*inch && Math.min(small,rollerDiameter/1000)<(minimumIn+2)*inch);
+    let provisional = Math.ceil(width*100-1e-9);
+    let final = tension(provisional/100);
+    for(let attempt=0; final.tight>allowable*provisional/100+1e-9 && attempt<100;attempt++){
+      add('text','Se prueba '+n(provisional*10)+' mm: la demanda supera la referencia de la tabla 17-2.');
+      provisional++;
+      final=tension(provisional/100);
     }
-    const final = tension(selected);
+    check(fitsWidth(provisional/100),'La nota a de la tabla 17-2 exige aumentar 2 in el diámetro mínimo de esta banda de cuero ancha.');
+    check(final.tight<=allowable*provisional/100+1e-9,'No se encontró ancho compatible tras redondear.');
+    const nextWidth=(provisional+1)/100;
+    const nextTension=tension(nextWidth);
+    const useReserve=fitsWidth(nextWidth)&&nextTension.tight<=allowable*nextWidth+1e-9;
+    const selected=useReserve?nextWidth:provisional/100;
+    if(useReserve) final=nextTension;
+    add('text',useReserve
+      ? 'El ancho mínimo redondeado que cumple frente a la referencia es '+n(provisional*10)+' mm. Se adopta el siguiente incremento de 10 mm, '+n(selected*1000)+' mm, como reserva provisional.'
+      : 'El incremento adicional de 10 mm incumple un criterio geométrico o de capacidad; se conserva el ancho mínimo compatible de '+n(selected*1000)+' mm.');
+    add('note','La reserva de ancho reduce la demanda por unidad de ancho calculada. No sustituye la tensión admisible a la velocidad real ni la verificación de contraflexión.');
     showTensions(selected, final);
     eq(math`T_{mot}=\Delta F\frac{d}{2}=(${n(delta)})\frac{${n(driver)}}{2}=${torque(delta*driver/2)}`);
     eq(math`\frac{F_c}{F_1}100=\frac{${n(final.centrifugal)}}{${n(final.tight)}}100=${n(100*final.centrifugal/final.tight)}\,\%`);

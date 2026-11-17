@@ -77,9 +77,22 @@ function springDesign(c,belt,add,check){
     selected+=.5;
   }
   check(selected<=wire.max,'El diámetro redondeado supera el rango de la tabla 10-4.');
-  const {sut}=sizing(selected), D=C*selected;
-  const G=1000*wire.G[selected/25.4<=.032?0:selected/25.4<=.063?1:selected/25.4<=.125?2:3];
-  const active=G*selected**4/(8*D**3*k);
+  function dimensions(d){
+    const D=C*d;
+    const inches=d/25.4;
+    const G=1000*wire.G[inches<=.032?0:inches<=.063?1:inches<=.125?2:3];
+    const active=G*d**4/(8*D**3*k);
+    return {D,G,active,envelope:active*d+4*c.hookRadius*d};
+  }
+  const minimumSelected=selected;
+  const reserve=selected+.5;
+  const useReserve=reserve<=wire.max&&Math.max(...sizing(reserve).required)<=reserve&&dimensions(reserve).envelope<=free;
+  if(useReserve) selected=reserve;
+  text(useReserve
+    ? 'El mínimo redondeado en estática es '+n(minimumSelected)+' mm. Se adopta el siguiente incremento de 0.5 mm, '+n(selected)+' mm, como reserva provisional.'
+    : 'El incremento adicional de 0.5 mm queda fuera del rango del material, de la resistencia calculada o del espacio disponible. Se conserva '+n(selected)+' mm.');
+  const {sut}=sizing(selected);
+  const {D,G,active,envelope}=dimensions(selected);
   const initialStress=8*C*fi/(Math.PI*selected**2);
   eq(math`d=${mm(selected)};\quad D=Cd=${mm(D)};\quad D_{\mathrm{ext}}=${mm(D+selected)}`);
   eq(math`G=${display(G/1000,'GPa')};\quad N_a=\frac{Gd^4}{8D^3k}=\frac{${n(G)}(${n(selected)})^4}{8(${n(D)})^3(${n(k,5)})}=${n(active,4)}`);
@@ -92,7 +105,6 @@ function springDesign(c,belt,add,check){
   eq(math`\sigma_A=\frac{F_{\max}}{\pi d^2}(16K_A C+4)=${MPa(sigmaA)};\quad n_A=${n(wire.sy*sut/sigmaA,4)}`);
   eq(math`\tau_B=K_B\frac{8F_{\max}D}{\pi d^3}=${MPa(tauB)};\quad n_B=${n(wire.shear*sut/tauB,4)}`);
   eq(math`L_{\mathrm{cuerpo,est}}=N_a d=${mm(active*selected)};\quad L_{0}=${mm(free)}`);
-  const envelope=active*selected+4*c.hookRadius*selected;
   eq(math`L_{est}=N_a d+4r_g=${mm(envelope)};\quad L_{0}=${mm(free)}`);
   check(envelope<=free,'La estimación de longitud del cuerpo y los dos ganchos excede la longitud libre.');
   head('Esfuerzos para la comprobación cíclica');
