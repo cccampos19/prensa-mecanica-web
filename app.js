@@ -127,10 +127,13 @@ for (const {label, columns, rows} of referenceTables) {
 
 const overview=document.querySelector('#overview');
 const stageTitle=document.querySelector('#stage-title');
-const stageGuidance=document.querySelector('#stage-guidance');
 const stageResult=document.querySelector('#stage-result');
 const stageMaterials=document.querySelector('#stage-material');
 const stageCalculation=document.querySelector('#stage-calculation');
+const resultTabs=document.querySelector('#result-tabs');
+const editStage=document.querySelector('#edit-stage');
+const decisionLog=document.querySelector('#decision-log');
+const proposalMaterials=document.querySelectorAll('[data-material-stage]');
 const stages=[
   ['Potencia y velocidades','powerFields'],
   ['Poleas y banda','beltFields'],
@@ -141,47 +144,41 @@ const stages=[
   ['Brazo tensor y resorte','springFields'],
   ['Diagramas de la propuesta',null]
 ];
-const guides={
-  2:'Elige una banda de la tabla 17-2 y el ancho inicial. La app itera el ancho y comprueba la geometría de las poleas con el material elegido.',
-  3:'El paso diametral y los dientes determinan los diámetros primitivos. Los valores de la tarea reproducen 160 y 640 mm. La app itera el ancho de cara con el acero elegido.',
-  5:'Elige el acero y el diámetro inicial. La app calcula el mínimo y verifica los diámetros compatibles con los rodamientos de la tabla 11-2.',
-  7:'Elige el alambre y su diámetro inicial. La app dimensiona el resorte dentro del intervalo de esa fila.'
-};
 let current;
+let submittedValues;
 let edited=false;
 let activeStage=1;
-let openCalculation=0;
 
 function formValues() {
   return Object.fromEntries(Array.from(new FormData(form),([key,value])=>[key,value===''?NaN:Number(value)]));
 }
 
-function selectEditor(id) {
-  for(const fieldset of form.querySelectorAll('fieldset')) fieldset.hidden=fieldset.id!==id;
+function setCurrentLink(links, key, value) {
+  for(const link of links){
+    if(link.dataset[key]===value) link.setAttribute('aria-current','page');
+    else link.removeAttribute('aria-current');
+  }
 }
 
 function showView() {
   const hash=location.hash.slice(1);
   const stageMatch=/^etapa-([1-8])$/.exec(hash);
   const stageView=Boolean(stageMatch)||hash==='datos'||hash==='memoria';
-  const view=stageView?'datos':hash==='catalogos'?'catalogos':'resultados';
+  const resultView=hash==='resultados'||hash==='bitacora';
+  const view=stageView?'datos':resultView?'resultados':hash==='catalogos'?'catalogos':'propuesta';
   if(stageMatch) activeStage=Number(stageMatch[1]);
   if(hash==='datos'&&activeStage===8) activeStage=1;
   for(const panel of document.querySelectorAll('.view')) panel.hidden=panel.id!==view;
-  const selected=stageView?'etapa-'+activeStage:view;
-  for(const link of document.querySelectorAll('.views [data-view]')){
-    if(link.dataset.view===selected) link.setAttribute('aria-current','page');
-    else link.removeAttribute('aria-current');
-  }
+  setCurrentLink(document.querySelectorAll('.views [data-view]'),'view',stageView?'resultados':hash==='bitacora'?'bitacora':view);
+  resultTabs.hidden=!(resultView||stageView);
+  setCurrentLink(resultTabs.querySelectorAll('[data-stage]'),'stage',stageView?'etapa-'+activeStage:'resultados');
   if(!stageView) return;
 
-  const [title,fieldset]=stages[activeStage-1];
+  const [title]=stages[activeStage-1];
   stageTitle.textContent=title;
-  stageGuidance.textContent=guides[activeStage]||'';
-  stageGuidance.hidden=!guides[activeStage];
-  form.hidden=!fieldset;
-  selectEditor(fieldset);
-  stageResult.hidden=!fieldset;
+  editStage.href=activeStage===8?'#propuesta':'#propuesta-'+activeStage;
+  editStage.textContent=activeStage===8?'Editar propuesta':'Editar datos de esta etapa';
+  stageResult.hidden=activeStage===8&&Boolean(current&&!current.error);
   const stageKey='etapa-'+activeStage;
   let hasCalculation=false;
   for(const section of memory.children){
@@ -189,13 +186,21 @@ function showView() {
     if(!section.hidden) hasCalculation=true;
   }
   stageCalculation.hidden=!hasCalculation;
-  stageCalculation.querySelector('summary').textContent=activeStage===8?'Ver diagramas':'Desarrollo del cálculo';
-  if(openCalculation!==activeStage){
-    stageCalculation.open=activeStage===8||hash==='memoria';
-    openCalculation=activeStage;
-  }
+  stageCalculation.querySelector('summary').textContent=activeStage===8?'Diagramas':'Desarrollo del cálculo';
+  stageCalculation.open=hasCalculation;
   renderStageResult();
   renderStageMaterial();
+}
+
+function navigateToView() {
+  const hash=location.hash.slice(1);
+  if(hash==='contenido') return;
+  showView();
+  if(hash==='bitacora'||/^propuesta-[1-7]$/.test(hash)){
+    document.getElementById(hash).scrollIntoView({block:'start'});
+  }else{
+    window.scrollTo({top:0});
+  }
 }
 
 function metric(value,unit,digits=2){
@@ -271,7 +276,11 @@ function stageStatus(result,stage){
 
 function renderStageResult() {
   stageResult.replaceChildren();
-  if(!current||activeStage===8) return;
+  if(!current){
+    stageResult.textContent='Calcula la propuesta para ver los resultados de esta etapa.';
+    return;
+  }
+  if(activeStage===8&&!current.error) return;
   const facts=stageFacts(current,activeStage,!edited);
   if(edited){
     const stale=document.createElement('p');
@@ -309,15 +318,8 @@ function renderStageResult() {
   }
 }
 
-function renderStageMaterial() {
-  const cards=stageMaterial(activeStage,formValues(),edited?null:current);
-  stageMaterials.replaceChildren();
-  stageMaterials.hidden=!cards.length;
-  if(!cards.length) return;
-
-  const heading=document.createElement('h3');
-  heading.textContent='Propiedades de catálogo';
-  stageMaterials.append(heading);
+function renderMaterialCards(host,cards) {
+  host.replaceChildren();
   for(const {title,source,rows,note} of cards){
     const card=document.createElement('section');
     card.className='material-card';
@@ -344,13 +346,46 @@ function renderStageMaterial() {
       notice.textContent=note;
       card.append(notice);
     }
-    stageMaterials.append(card);
+    host.append(card);
   }
 }
-window.addEventListener('hashchange',showView);
+
+function renderStageMaterial() {
+  const cards=current?stageMaterial(activeStage,submittedValues,current):[];
+  stageMaterials.hidden=!cards.length;
+  renderMaterialCards(stageMaterials,cards);
+}
+
+function renderProposalMaterials() {
+  const values=formValues();
+  for(const group of proposalMaterials){
+    const cards=stageMaterial(group.dataset.materialStage,values,null);
+    group.hidden=!cards.length;
+    renderMaterialCards(group.querySelector('.proposal-material'),cards);
+  }
+}
+
+window.addEventListener('hashchange',navigateToView);
+document.querySelector('.skip').addEventListener('click',event=>{
+  event.preventDefault();
+  document.querySelector('#contenido').focus();
+});
 
 function renderOverview(result) {
   overview.replaceChildren();
+  if(!result){
+    const note=document.createElement('p');
+    note.className='note';
+    note.textContent='La propuesta de la tarea está precargada. Calcula el conjunto para ver las dimensiones y comprobaciones.';
+    overview.append(note);
+    return;
+  }
+  if(edited){
+    const note=document.createElement('p');
+    note.className='note';
+    note.textContent='Estos resultados corresponden a la última corrida. Calcula de nuevo para aplicar los cambios.';
+    overview.append(note);
+  }
   if(result.error){
     const notice=document.createElement('p');
     notice.className='note';
@@ -358,20 +393,19 @@ function renderOverview(result) {
     const link=document.createElement('a');
     link.className='button secondary';
     link.href='#etapa-'+failureStage(result);
-    link.textContent='Revisar la propuesta';
+    link.textContent='Revisar el cálculo que se detuvo';
     overview.append(notice,link);
-    return;
   }
   const {power,belt,design,spring}=result;
   const values=[
-    ['Potencia requerida',number(power.motorPower/1000,2)+' kW',number(power.outRpm)+' rpm a la salida',1],
-    ['Ancho de banda',number(1000*belt.selected)+' mm','Rodillo de '+number(belt.rollerDiameter)+' mm',2],
-    ['Engranes',number(design.faceMm)+' mm de cara','Módulo '+number(design.module)+' mm',3],
-    ['Equilibrio de la flecha',metric(Math.max(...design.moments),'N·m'),'Momento flector máximo',4],
-    ['Flecha',number(design.diameter)+' mm',edited?'Material pendiente de recálculo':steels[design.shaftSteelIndex]?.label||'Diámetro comercial',5],
-    ['Rodamientos',number(design.diameter)+' mm de agujero','Vida mínima L10: '+metric(Math.min(...design.bearingLife),'h',0),6],
-    ['Resorte',number(spring.selected)+' mm de alambre',number(spring.fmin,1)+' a '+number(spring.fmax,1)+' N',7]
-  ];
+    power&&['Potencia requerida',number(power.motorPower/1000,2)+' kW',number(power.outRpm)+' rpm a la salida',1],
+    belt&&['Ancho de banda',number(1000*belt.selected)+' mm','Rodillo de '+number(belt.rollerDiameter)+' mm',2],
+    design&&['Engranes',number(design.faceMm)+' mm de cara','Módulo '+number(design.module)+' mm',3],
+    design&&['Equilibrio de la flecha',metric(Math.max(...design.moments),'N·m'),'Momento flector máximo',4],
+    design&&['Flecha',number(design.diameter)+' mm',steels[design.shaftSteelIndex]?.label||'Diámetro comercial',5],
+    design&&['Rodamientos',number(design.diameter)+' mm de agujero','Vida mínima L10 de '+metric(Math.min(...design.bearingLife),'h',0),6],
+    spring&&['Resorte',number(spring.selected)+' mm de alambre',number(spring.fmin,1)+' a '+number(spring.fmax,1)+' N',7]
+  ].filter(Boolean);
   const grid=document.createElement('div');
   grid.className='grid';
   for(const [label,value,detail,stage] of values){
@@ -390,14 +424,76 @@ function renderOverview(result) {
     card.append(title,reading,caption,link);
     grid.append(card);
   }
-  const note=document.createElement('p');
-  note.className='note';
-  note.textContent='Banda: '+number(belt.review.demandImperial,2)+' lbf/in a '+number(belt.review.operatingFpm,0)+' ft/min. La tabla solo da el límite de referencia a 600 ft/min. Resorte: estática comprobada, con factor mínimo '+number(Math.min(...spring.elasticFactors),2)+'. Faltan la resistencia cíclica y los ciclos objetivo.';
-  const diagrams=document.createElement('a');
-  diagrams.href='#etapa-8';
-  diagrams.className='button secondary';
-  diagrams.textContent='Ver diagramas';
-  overview.append(grid,note,diagrams);
+  if(values.length) overview.append(grid);
+  if(!result.error){
+    const note=document.createElement('p');
+    note.className='note';
+    note.textContent='La banda requiere verificar la tensión admisible a '+number(belt.review.operatingFpm,0)+' ft/min y la contraflexión. El resorte cumple estática en el modelo y queda pendiente de verificar a fatiga.';
+    overview.append(note);
+  }
+}
+
+function renderDecisions(result) {
+  decisionLog.replaceChildren();
+  if(!result?.decisions.length||edited){
+    const note=document.createElement('p');
+    note.className='note';
+    note.textContent=edited?'Calcula la propuesta para actualizar la bitácora.':
+      result?'La corrida se detuvo antes de registrar candidatas.':'Las medidas probadas aparecerán aquí después de calcular.';
+    decisionLog.append(note);
+    return;
+  }
+
+  for(const [index,{title,summary,trials}] of result.decisions.entries()){
+    const card=document.createElement('article');
+    card.className='decision-card';
+    const header=document.createElement('div');
+    header.className='decision-heading';
+    const name=document.createElement('h3');
+    name.id='decision-group-'+(index+1);
+    name.textContent=title;
+    header.append(name);
+    const selected=trials.find(trial=>trial.status==='selected');
+    const selection=document.createElement('p');
+    selection.className='decision-selection';
+    selection.textContent=selected?'Selección · '+selected.measure:trials.length?'Sin medida seleccionada':'Sin medidas probadas';
+    header.append(selection);
+    card.append(header);
+    if(summary){
+      const description=document.createElement('p');
+      description.className='decision-summary';
+      description.textContent=summary;
+      card.append(description);
+    }
+    if(trials.length) {
+      const container=document.createElement('div');
+      container.className='decision-trials';
+      const table=document.createElement('table');
+      table.setAttribute('aria-labelledby',name.id);
+      const head=table.createTHead().insertRow();
+      for(const label of ['Medida','Resultado','Motivo']){
+        const cell=document.createElement('th');
+        cell.scope='col';
+        cell.textContent=label;
+        head.append(cell);
+      }
+      const body=table.createTBody();
+      for(const {measure,status,reason} of trials){
+        const row=body.insertRow();
+        row.dataset.status=status;
+        row.insertCell().textContent=measure;
+        const tag=document.createElement('span');
+        tag.className='trial-status';
+        tag.dataset.status=status;
+        tag.textContent=decisionLabels[status];
+        row.insertCell().append(tag);
+        row.insertCell().textContent=reason;
+      }
+      container.append(table);
+      card.append(container);
+    }
+    decisionLog.append(card);
+  }
 }
 
 function render(entries) {
@@ -441,7 +537,7 @@ function render(entries) {
       if (window.katex) window.katex.render(formatEquation(value), element, {displayMode:true, throwOnError:false});
       else element.textContent = value;
     } else {
-      element.textContent = value;
+      element.textContent = plainNumberNotation(value);
       if (type === 'note') element.className = 'note';
     }
     target.append(element);
@@ -460,14 +556,40 @@ function formatEquation(value) {
     terms.slice(1).join(' \\\\\n&=') + '\n\\end{aligned}';
 }
 
+const decisionLabels={rejected:'Descartada',viable:'Viable',selected:'Seleccionada'};
+
+function reportEntries(result) {
+  const log=result.decisions.map(value=>({type:'decision',value}));
+  if(!log.length) log.push({type:'note',value:'La corrida se detuvo antes de registrar candidatas.'});
+  return [...result.entries,{type:'section',value:'Bitácora de decisiones'},...log];
+}
+
+function decisionTex({title,summary,trials},escape) {
+  const heading='\\subsection*{'+escape(title)+'}';
+  const description=summary?escape(summary):'';
+  if(!trials.length) return [heading,description,'La corrida no llegó a probar una medida.'].filter(Boolean).join('\n\n');
+
+  const header='\\textbf{Medida} & \\textbf{Resultado} & \\textbf{Motivo} \\\\ \\hline';
+  const rows=trials.map(({measure,status,reason})=>{
+    const label=escape(decisionLabels[status]);
+    const result=status==='selected'?'\\textbf{'+label+'}':label;
+    return [escape(measure),result,escape(reason)].join(' & ')+' \\\\';
+  });
+  const table=['\\begin{longtable}{@{}p{.16\\linewidth}p{.18\\linewidth}p{.57\\linewidth}@{}}',
+    '\\hline',header,'\\endfirsthead','\\hline',header,'\\endhead',
+    '\\hline','\\endfoot',...rows,'\\end{longtable}'].join('\n');
+  return [heading,description,table].filter(Boolean).join('\n\n');
+}
+
 function tex(entries) {
-  const escape = value => value.replace(/[#$%&_{}]/g, character => '\\' + character).replace(/–/g,'--').replace(/·/g,'\\textperiodcentered{}');
+  const escape = value => plainNumberNotation(value).replace(/[#$%&_{}]/g, character => '\\' + character).replace(/–/g,'--').replace(/·/g,'\\textperiodcentered{}');
   return [
     '\\documentclass[11pt]{article}',
     '\\usepackage[T1]{fontenc}',
     '\\usepackage[spanish,es-minimal]{babel}',
     '\\usepackage{amsmath}',
     '\\usepackage{pict2e}',
+    '\\usepackage{longtable}',
     '\\usepackage[a4paper,margin=20mm]{geometry}',
     '\\allowdisplaybreaks',
     '\\setlength{\\parskip}{0.45em}',
@@ -478,6 +600,7 @@ function tex(entries) {
     '\\maketitle',
     ...entries.map(({type, value}) => {
       if (type === 'diagram') return diagramTex(value,escape);
+      if (type === 'decision') return decisionTex(value,escape);
       if (type === 'eq') {
         return '\\[\n' + formatEquation(value) + '\n\\]';
       }
@@ -491,19 +614,19 @@ function tex(entries) {
 function run() {
   const invalid=Array.from(form.elements).find(input=>input.willValidate&&!input.validity.valid);
   if(invalid){
-    activeStage=stages.findIndex(([,id])=>id===invalid.closest('fieldset').id)+1;
-    location.hash='etapa-'+activeStage;
-    showView();
-    invalid.focus();
+    invalid.scrollIntoView({block:'center'});
+    invalid.focus({preventScroll:true});
     invalid.reportValidity();
     return false;
   }
-  current=calculate(formValues());
+  submittedValues=formValues();
+  current=calculate(submittedValues);
   edited=false;
   render(current.entries);
   renderOverview(current);
+  renderDecisions(current);
   showView();
-  calculationStatus.textContent=current.error?'Corrida detenida · '+stages[failureStage(current)-1][0]:'Propuesta calculada con los datos de las siete etapas';
+  calculationStatus.textContent=current.error?'Corrida detenida · '+stages[failureStage(current)-1][0]:'Propuesta calculada';
   calculationStatus.dataset.state=current.error?'error':'ready';
   updateDownloads();
   if(!generatingPdf) pdfStatus.textContent='';
@@ -513,28 +636,33 @@ form.addEventListener('submit',event=>{
   event.preventDefault();
   const previous=current;
   run();
-  if(current!==previous&&current.error){
-    location.hash='etapa-'+failureStage(current);
-    showView();
-    if(!stageCalculation.hidden) stageCalculation.open=true;
+  if(current!==previous){
+    location.hash='resultados';
+    navigateToView();
+    document.querySelector('#results-title').focus({preventScroll:true});
   }
 });
-form.addEventListener('input',event=>{
-  if(!event.target.name) return;
+
+function markEdited(message) {
   const firstEdit=!edited;
   edited=true;
-  renderStageMaterial();
-  if(!firstEdit) return;
-  renderStageResult();
-  if(current) renderOverview(current);
-  updateDownloads();
+  renderProposalMaterials();
+  if(firstEdit){
+    renderOverview(current);
+    renderDecisions(current);
+    updateDownloads();
+  }
   if(!generatingPdf) pdfStatus.textContent='';
   calculationStatus.dataset.state='edited';
-  calculationStatus.textContent='Hay cambios sin calcular. Pulsa Calcular para actualizar los resultados.';
+  calculationStatus.textContent=message;
+}
+
+form.addEventListener('input',event=>{
+  if(event.target.name) markEdited('Hay cambios sin calcular.');
 });
 document.querySelector('#restore').addEventListener('click',()=>{
   for(const [key,value] of Object.entries(defaults)) form.elements.namedItem(key).value=value;
-  run();
+  markEdited('Datos de la tarea restaurados. Calcula para ver los resultados.');
 });
 function updateDownloads(){
   const available=!edited&&Boolean(current?.entries.some(entry=>entry.type==='eq'));
@@ -556,7 +684,7 @@ function saveDocument(blob,name){
 }
 
 download.addEventListener('click',()=>{
-  saveDocument(new Blob([tex(current.entries)],{type:'application/x-tex;charset=utf-8'}),memoryFilename(current,'tex'));
+  saveDocument(new Blob([tex(reportEntries(current))],{type:'application/x-tex;charset=utf-8'}),memoryFilename(current,'tex'));
 });
 downloadPdf.addEventListener('click',async()=>{
   const snapshot=current;
@@ -564,7 +692,7 @@ downloadPdf.addEventListener('click',async()=>{
   updateDownloads();
   pdfStatus.textContent='Preparando el PDF…';
   try{
-    const document=await buildMemoryPdf(snapshot.entries,formatEquation,(completed,total)=>{
+    const document=await buildMemoryPdf(reportEntries(snapshot),formatEquation,(completed,total)=>{
       pdfStatus.textContent='Generando PDF… '+Math.floor(100*completed/total)+' %';
     });
     if(snapshot!==current||edited){
@@ -580,4 +708,12 @@ downloadPdf.addEventListener('click',async()=>{
     updateDownloads();
   }
 });
-window.addEventListener('DOMContentLoaded',()=>run());
+window.addEventListener('DOMContentLoaded',()=>{
+  renderProposalMaterials();
+  if(/^#(?:etapa-[1-8]|datos|memoria|resultados|bitacora)$/.test(location.hash)) run();
+  else {
+    renderOverview();
+    renderDecisions();
+  }
+  navigateToView();
+});

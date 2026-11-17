@@ -14,7 +14,7 @@ const shaftLoadFactors = [
   {label:'Torsión · 0.59',value:.59}
 ];
 
-function finishDesign(c, power, belt, entries, check) {
+function finishDesign(c, power, belt, entries, check, {decision,trial}) {
   const add = (type,value) => entries.push({type,value});
   const n = number;
   const eq = value => add('eq', value);
@@ -181,6 +181,8 @@ function finishDesign(c, power, belt, entries, check) {
   text('Se prueban múltiplos del incremento propuesto de '+n(faceStep)+' mm dentro de 3 a 5 pasos circulares. El incremento es una decisión de fabricación.');
   const lastFace=Math.floor((maxFace*25.4+1e-9)/faceStep);
   const firstFace=Math.ceil((minFace*25.4-1e-9)/faceStep);
+  const faceDecision=decision(3,'Ancho de cara de los engranes','mm',
+    gear.label+' con paso diametral '+n(diametral,5)+' dientes/in. Intervalo de '+n(minFace*25.4,2)+' a '+n(maxFace*25.4,2)+' mm e incremento de fabricación de '+n(faceStep)+' mm.');
   check(firstFace<=lastFace,'El incremento de '+n(faceStep)+' mm no genera anchos dentro de '+n(minFace*25.4,2)+' a '+n(maxFace*25.4,2)+' mm.');
   const startCandidate=Math.min(lastFace,Math.ceil((width*25.4-1e-9)/faceStep));
   let faceMm, gearFatigue, gearStatic;
@@ -197,6 +199,11 @@ function finishDesign(c, power, belt, entries, check) {
     const fatigueOk=checks.every(value=>value.fatigue>=c.gearFat);
     const staticOk=checks.every(value=>value.stat>=c.gearStatic);
     text('Fatiga '+(fatigueOk?'cumple':'insuficiente')+' para el objetivo '+n(c.gearFat)+'. Estática '+(staticOk?'cumple':'insuficiente')+' para el objetivo '+n(c.gearStatic)+'.');
+    const minFatigue=Math.min(...checks.map(value=>value.fatigue));
+    const minStatic=Math.min(...checks.map(value=>value.stat));
+    trial(faceDecision,widthMm,fatigueOk&&staticOk?'selected':'rejected',
+      'Factor mínimo de fatiga '+n(minFatigue,4)+' frente a '+n(c.gearFat)+' requerido. Factor estático mínimo '+n(minStatic,4)+' frente a '+n(c.gearStatic)+' requerido. '
+      +(fatigueOk&&staticOk?'Cumple ambos en el piñón y la rueda.':'Falla '+(!fatigueOk&&!staticOk?'fatiga y estática.':fatigueOk?'estática.':'fatiga.')));
     if(fatigueOk&&staticOk){
       faceMm=widthMm;
       gearFatigue=checks.map(value=>value.fatigue);
@@ -314,6 +321,9 @@ function finishDesign(c, power, belt, entries, check) {
   const continuous=solveDiameter(shaft);
   heading('Verificación por diámetro de catálogo');
   text('La medida final se decide con las comprobaciones directas de cada diámetro. El resultado continuo sirve como referencia de dimensionamiento.');
+  const shaftDecision=decision(5,'Diámetro base de la flecha','mm',
+    shaft.label+'. Se prueban agujeros compatibles con la vida, la carga y el montaje de los rodamientos.'
+    +(continuous===null?'':' El cálculo continuo dio '+n(continuous,2)+' mm.'));
   const shaftTrials=[];
   let chosen;
   for(const {row,fit} of bearingOptions){
@@ -328,6 +338,7 @@ function finishDesign(c, power, belt, entries, check) {
     eq(math`n_{f,2}=${n(sections[0].nf,4)};\quad n_{est,2}=${n(sections[0].ns,4)};\quad n_{f,3}=${n(sections[1].nf,4)};\quad n_{est,3}=${n(sections[1].ns,4)}`);
     const reason='Fatiga '+(fatigueOk?'cumple':'insuficiente')+' para el objetivo '+n(c.shaftFat)+'. Estática '+(staticOk?'cumple':'insuficiente')+' para el objetivo '+n(c.shaftStatic)+'.';
     text(reason);
+    trial(shaftDecision,d,accepted?'selected':'rejected',reason+' Índice mínimo de Hencky–Marin de '+n(fatigue,4)+' y factor estático mínimo de '+n(staticSafety,4)+'.');
     shaftTrials.push({index:shaftSteelIndex,continuous,diameter:d,fatigue,static:staticSafety,reason,accepted});
     if(accepted){
       chosen=row;
@@ -340,6 +351,8 @@ function finishDesign(c, power, belt, entries, check) {
   section('Rodamientos y cierre');
   text('Apuntes, pp. 56–60, tablas 11-1 y 11-2. Engranes rectos y banda plana sin empuje axial externo: V = 1, X = 1, Y = 0. La vida L10 corresponde al 90 % de confiabilidad de rodamiento.');
   text(bearingType+' · serie 02. Ambos apoyos usan el mismo diámetro base.');
+  const bearingDecision=decision(6,'Agujero de los rodamientos','mm',
+    bearingType+' de la serie 02, tabla 11-2. Se busca un agujero común que cubra '+n(c.life)+' h de vida L10, estática y montaje en ambos apoyos.');
   eq(math`L_{10}=\frac{60(${n(power.shaftRpm)})(${n(c.life)})}{10^6}=${n(life)}\quad\text{millones de revoluciones}`);
   requirements.forEach(([dynamic,staticLoad],i)=>{
     const load=loads[i], side=i===0?1:4;
@@ -354,15 +367,28 @@ function finishDesign(c, power, belt, entries, check) {
     const [C10,C0]=row.slice(column,column+2);
     add('iteration','Candidato · '+d+' mm');
     eq(math`d=${mm(d)};\quad C_{10}=${kip(C10)};\quad C_0=${kip(C0)}`);
+    const failures=[];
     passes.forEach(([dynamicPass,staticPass],i)=>{
       text('Apoyo '+(i===0?1:4)+'. Dinámica '+(dynamicPass?'cumple':'insuficiente')+', estática '+(staticPass?'cumple':'insuficiente')+'.');
+      const support=i===0?' en el apoyo 1':' en el apoyo 4';
+      if(!dynamicPass) failures.push('Capacidad dinámica insuficiente'+support+'.');
+      if(!staticPass) failures.push('Capacidad estática insuficiente'+support+'.');
     });
     text('Hombros '+(shoulders?'compatibles':'insuficientes')+'. Espaciador '+(spacer?'compatible':'incompatible')+'.');
+    if(!shoulders) failures.push('Hombros insuficientes.');
+    if(!spacer) failures.push('Espaciador incompatible.');
     if(row===chosen){
+      trial(bearingDecision,d,'selected','Cumple vida, estática y montaje en ambos apoyos. Coincide con el diámetro aprobado de la flecha.');
       text('Diámetro seleccionado en conjunto con '+shaft.label+'.');
       break;
     }
-    if(option.fit) text('Se descartó este diámetro en la comprobación de la flecha con '+shaft.label+'.');
+    if(option.fit){
+      const reason='Cumple vida, estática y montaje de rodamientos. Se descarta en la comprobación de la flecha con '+shaft.label+'.';
+      text('Se descartó este diámetro en la comprobación de la flecha con '+shaft.label+'.');
+      trial(bearingDecision,d,'viable',reason);
+    } else {
+      trial(bearingDecision,d,'rejected',failures.join(' '));
+    }
   }
   check(shaftTrials.length,'La tabla 11-2 no ofrece agujeros compatibles con la vida, las cargas y el montaje de la serie propuesta.',6);
   check(chosen,'Con '+shaft.label+', ningún diámetro compatible de la tabla 11-2 alcanza las seguridades de la flecha.',5);

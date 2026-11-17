@@ -19,6 +19,7 @@ const display = (value, name, digits) => number(value, digits) + unit(name);
 const dual = (value, si, factor, english) =>
   display(value, si) + '\\quad(' + display(value * factor, english) + ')';
 const math = String.raw;
+const plainNumberNotation = value => value.replace(/\\times 10\^\{(-?\d+)\}/g, 'e$1');
 
 function calculate(c) {
   const entries = [];
@@ -33,6 +34,18 @@ function calculate(c) {
   const mm = meters => dual(meters * 1000, 'mm', 1 / (1000 * inch), 'in');
   const force = value => dual(value, 'N', 1 / lbf, 'lbf');
   const iterations = [];
+  const decisions = [];
+  function decision(stage, title, unit, summary) {
+    const group = {stage, title, unit, summary:plainNumberNotation(summary), trials:[]};
+    decisions.push(group);
+    return group;
+  }
+  function trial(group, value, status, reason) {
+    const candidate = {measure:plainNumberNotation(n(value))+' '+group.unit, status, reason:plainNumberNotation(reason)};
+    group.trials.push(candidate);
+    return candidate;
+  }
+  const decisionLog = {decision, trial};
   let power;
   let belt;
   let design;
@@ -75,6 +88,10 @@ function calculate(c) {
     eq(math`T_m=\frac{60P_m}{2\pi n_m}=\frac{60(${n(motorPower)})}{2\pi(${n(c.rpm)})}=${torque(motorTorque)}`);
     add('heading', 'Comprobación del motor nominal');
     const motorFits = c.nominal * 1000 >= motorPower;
+    const motorDecision=decision(1,'Potencia nominal del motor','kW','Potencia mecánica requerida de '+n(motorPower/1000)+' kW.');
+    trial(motorDecision,c.nominal,motorFits?'selected':'rejected',motorFits
+      ?'La potencia nominal cubre la potencia calculada.'
+      :'La potencia nominal queda por debajo de la potencia calculada.');
     eq(math`P_{nom}=${kw(c.nominal*1000)}${motorFits ? '\\ge ' : '<'}P_m=${kw(motorPower)}`);
     power = {shaftRpm,outRpm,motorPower,shaftTorque,outPower,outTorque,motorTorque,motorFits};
     check(motorFits, 'El motor propuesto entrega '+n(c.nominal)+' kW nominales y el cálculo requiere al menos '+n(motorPower/1000)+' kW.');
@@ -108,6 +125,9 @@ function calculate(c) {
     if (name.startsWith('Cuero')) add('note', 'Se utiliza el extremo superior de 0.045 lbf/in³ del intervalo de la tabla 17-2 para el cuero.');
     eq(math`d=D/i_b=${n(driven)}/${n(c.ratio)}=${mm(driver)}`);
     eq(math`d_{menor}=${mm(small)}${small >= minimumIn*inch ? '\\ge ' : '<'}d_{min}=${mm(minimumIn*inch)}`);
+    const pulleyDecision=decision(2,'Diámetro de la polea menor','mm','Polea motriz de '+n(driver*1000)+' mm y conducida de '+n(driven*1000)+' mm con '+name+'.');
+    trial(pulleyDecision,small*1000,small>=minimumIn*inch?'selected':'rejected',
+      (small>=minimumIn*inch?'Cumple el mínimo de ':'Queda por debajo del mínimo de ')+n(minimumIn*inch*1000)+' mm de la tabla 17-2.');
     if(small<minimumIn*inch){
       const minimumDriven=minimumIn*inch*Math.max(1,c.ratio);
       check(false,'La polea menor queda por debajo del mínimo de la tabla 17-2 para '+name+'. A esta relación se requiere una polea conducida de al menos '+n(minimumDriven*1000)+' mm, antes de verificar el espacio del tensor.');
@@ -116,6 +136,7 @@ function calculate(c) {
     const minRoller=1000*minimumIn*inch;
     const maxRoller=300-driver*1000;
     const proposed=2*c.idlerRadius;
+    const rollerDecision=decision(2,'Diámetro del rodillo tensor','mm','Se prueba el diámetro inicial de '+n(proposed)+' mm y alternativas separadas por 2 mm, en orden de proximidad. La contraflexión está pendiente de verificación.');
     add('text','Diámetro inicial del rodillo de '+n(proposed)+' mm. Las alternativas están separadas por 2 mm y se prueban de la más cercana a la más lejana. La disponibilidad depende del proveedor.');
     check(minRoller<maxRoller,'Con '+name+', el rodillo debe medir al menos '+n(minRoller)+' mm según la referencia de la tabla 17-2 y menos de '+n(maxRoller)+' mm por el espacio entre el pivote y el rodillo.');
     const alternatives=[];
@@ -125,25 +146,32 @@ function calculate(c) {
     alternatives.sort((a,b)=>Math.abs(a-proposed)-Math.abs(b-proposed));
     const candidates=[proposed,...alternatives];
     let geometry, rollerDiameter, rejection;
-    for(const trial of candidates){
-      add('iteration','Candidato de rodillo · '+n(trial)+' mm');
-      if(trial<minRoller){
-        add('text','El diámetro queda por debajo del mínimo de referencia de '+n(minRoller)+' mm de la tabla 17-2.');
+    for(const diameter of candidates){
+      add('iteration','Candidato de rodillo · '+n(diameter)+' mm');
+      if(diameter<minRoller){
+        const reason='El diámetro queda por debajo del mínimo de referencia de '+n(minRoller)+' mm de la tabla 17-2.';
+        add('text',reason);
+        trial(rollerDecision,diameter,'rejected',reason);
         continue;
       }
-      if(trial>=maxRoller){
-        add('text','El diámetro supera el espacio disponible entre la polea motriz y el rodillo.');
+      if(diameter>=maxRoller){
+        const reason='El diámetro supera el espacio disponible entre la polea motriz y el rodillo.';
+        add('text',reason);
+        trial(rollerDecision,diameter,'rejected',reason);
         continue;
       }
       try {
-        geometry=tensorGeometry({...c,idlerRadius:trial/2},driven,driver,tightAngle,check);
+        geometry=tensorGeometry({...c,idlerRadius:diameter/2},driven,driver,tightAngle,check);
       } catch(error) {
         rejection=error.message;
         add('text',rejection);
+        trial(rollerDecision,diameter,'rejected',rejection);
         continue;
       }
-      rollerDiameter=trial;
-      add('text','Cumple el mínimo geométrico de referencia y conserva contacto en el recorrido.');
+      rollerDiameter=diameter;
+      const reason='Cumple el mínimo geométrico de referencia y conserva contacto en el recorrido.';
+      add('text',reason);
+      trial(rollerDecision,diameter,'selected',reason);
       break;
     }
     check(geometry,'La selección del rodillo no tiene solución geométrica. '+(rejection||'El mínimo de tabla excede el espacio disponible.'));
@@ -166,6 +194,7 @@ function calculate(c) {
     eq(math`R_{\lim}=e^{\mu\min(\theta_m,\theta_c)}=e^{(${n(friction)})(${n(Math.min(smallWrap,largeWrap),5)})}=${n(ratio,5)}`);
 
     const centrifugalPerWidth=density*thickness*speed**2;
+    const widthDecision=decision(2,'Ancho de la banda','mm','Se prueban incrementos de diseño de 10 mm con '+name+'. La referencia de tensión de la tabla 17-2 corresponde a 600 ft/min.');
     check(centrifugalPerWidth<allowable,'Para '+name+', la tensión centrífuga por unidad de ancho supera o iguala la referencia de la tabla 17-2. Aumentar el ancho no resuelve la propuesta.');
     const tension = width => {
       const centrifugal = centrifugalPerWidth * width;
@@ -206,18 +235,31 @@ function calculate(c) {
     add('text','Se prueban anchos en incrementos de diseño de 10 mm. La tabla 17-2 da la tensión por unidad de ancho. La disponibilidad de la medida resultante depende del proveedor.');
     const fitsWidth = candidate => !(name.startsWith('Cuero') && [6,9].includes(minimumIn) &&
       candidate>=8*inch && Math.min(small,rollerDiameter/1000)<(minimumIn+2)*inch);
+    function logWidth(candidate, tensions) {
+      const capacity=allowable*candidate;
+      const tensionOk=tensions.tight<=capacity+1e-9;
+      const geometryOk=fitsWidth(candidate);
+      const reason='Demanda de '+n(tensions.tight,1)+' N frente a '+n(capacity,1)+' N de capacidad de referencia. '
+        +(tensionOk?'Cumple tensión.':'Capacidad insuficiente.')+' '
+        +(geometryOk?'Cumple la geometría de referencia.':'La nota a de la tabla 17-2 exige un diámetro de polea mayor.');
+      return trial(widthDecision,candidate*1000,tensionOk&&geometryOk?'viable':'rejected',reason);
+    }
     let provisional = Math.ceil(width*100-1e-9);
     let final = tension(provisional/100);
     for(let attempt=0; final.tight>allowable*provisional/100+1e-9 && attempt<100;attempt++){
       add('text','Se prueba '+n(provisional*10)+' mm: la demanda supera la referencia de la tabla 17-2.');
+      logWidth(provisional/100,final);
       provisional++;
       final=tension(provisional/100);
     }
+    const nominalWidthTrial=logWidth(provisional/100,final);
     check(fitsWidth(provisional/100),'La nota a de la tabla 17-2 exige aumentar 2 in el diámetro mínimo de esta banda de cuero ancha.');
     check(final.tight<=allowable*provisional/100+1e-9,'No se encontró ancho compatible tras redondear.');
     const nextWidth=(provisional+1)/100;
     const nextTension=tension(nextWidth);
-    const useReserve=fitsWidth(nextWidth)&&nextTension.tight<=allowable*nextWidth+1e-9;
+    const reserveWidthTrial=logWidth(nextWidth,nextTension);
+    const useReserve=reserveWidthTrial.status==='viable';
+    const selectedWidthTrial=useReserve?reserveWidthTrial:nominalWidthTrial;
     const selected=useReserve?nextWidth:provisional/100;
     if(useReserve) final=nextTension;
     add('text',useReserve
@@ -235,7 +277,16 @@ function calculate(c) {
     add('text','En la polea conducida actúan las dos tensiones en sus direcciones tangentes locales. La reacción de la polea auxiliar va a su pivote.');
     const mid=final.states[50];
     const maximumGrip=Math.max(...final.states.map(s=>(s.tight-final.centrifugal)/((s.slack-final.centrifugal)*Math.exp(friction*Math.min(s.wrapMotor,s.wrapDriven)))));
-    check(maximumGrip>0&&maximumGrip<=1+1e-9,'La banda pierde condición de tracción en el recorrido.');
+    const gripOk=maximumGrip>0&&maximumGrip<=1+1e-9;
+    if(!gripOk) {
+      selectedWidthTrial.status='rejected';
+      selectedWidthTrial.reason+=' La banda pierde tracción en el recorrido.';
+    }
+    check(gripOk,'La banda pierde condición de tracción en el recorrido.');
+    selectedWidthTrial.status='selected';
+    selectedWidthTrial.reason+=useReserve
+      ?' Se elige un incremento adicional como reserva provisional.'
+      :' Se conserva el menor ancho compatible porque la reserva se descartó.';
     eq(math`\max_j\frac{F_{1,j}-F_c}{(F_{2,j}-F_c)e^{\mu\min(\theta_{m,j},\theta_{c,j})}}=${n(maximumGrip,6)}\le 1`);
     eq(math`F_y=F_1\cos\gamma_t+F_2\cos\gamma_{f,c}=${n(mid.tight)}\cos(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\cos(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fy)}`);
     eq(math`F_z=F_1\sin\gamma_t+F_2\sin\gamma_{f,c}=${n(mid.tight)}\sin(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\sin(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fz)}`);
@@ -252,9 +303,9 @@ function calculate(c) {
     add('note','Dato faltante para contraflexión y vida: diámetro mínimo de rodillo exterior para la banda elegida y curva de duración frente a flexiones inversas, o ficha del fabricante que califique la configuración. El rodillo propuesto mide '+n(rollerDiameter)+' mm y cada punto de la banda pasa por él aproximadamente '+n(lapsPerSecond,2)+' veces por segundo en marcha continua. Hace falta definir la vida objetivo de banda y su ciclo de servicio.');
     const beltReview={demandImperial,allowableIn,operatingFpm,maximumGrip,lapsPerSecond};
     belt = {selected,speed,length,capacity,...final,fy:mid.fy,fz:mid.fz,rollerDiameter,driver,driven,review:beltReview};
-    design = finishDesign(c, power, belt, entries, check);
+    design = finishDesign(c, power, belt, entries, check, decisionLog);
     add('section','Brazo tensor y resorte de tensión');
-    const spring = springDesign(c, belt, add, check);
+    const spring = springDesign(c, belt, add, check, decisionLog);
     add('heading','Conclusión y especificaciones de la propuesta');
     add('text','Motor nominal de '+c.nominal+' kW para '+n(motorPower/1000)+' kW requeridos. Banda '+name+' de '+n(selected*1000)+' mm, longitud nominal '+n(length)+' m y poleas de '+n(driver*1000)+' y '+n(driven*1000)+' mm.');
     add('text','Engranes '+c.np+'/'+c.ng+' dientes, '+steels[c.gearSteel].label+', diámetros primitivos de '+n(design.pinion)+' y '+n(design.gear)+' mm, módulo '+n(design.module)+' mm y cara '+n(design.faceMm)+' mm. Flecha '+steels[design.shaftSteelIndex].label+' de '+n(design.diameter)+' mm y rodamientos serie 02 de '+n(design.diameter)+' mm de agujero.');
@@ -264,10 +315,10 @@ function calculate(c) {
     add('text','Budynas y Nisbett, Diseño en ingeniería mecánica de Shigley, 10.ª ed., cap. 10, ecuaciones geométricas de esfuerzo en el gancho.');
     add('section','Diagramas de la propuesta');
     for(const diagram of designDiagrams(c,power,belt,design,spring)) add('diagram',diagram);
-    return {entries, power, belt, design, spring, iterations};
+    return {entries, power, belt, design, spring, iterations, decisions};
   } catch (error) {
     const errorStage=error.stage??entries.filter(entry=>entry.type==='section').length;
     add('note', 'Propuesta sin cierre en esta corrida. '+error.message);
-    return {entries, power, belt, design, iterations, error: error.message, errorStage};
+    return {entries, power, belt, design, iterations, decisions, error: error.message, errorStage};
   }
 }

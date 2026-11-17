@@ -68,7 +68,7 @@ async function equationImage(tex, maxWidth, maxHeight) {
 async function buildMemoryPdf(entries,format,onProgress) {
   await getPdfTools();
   const pdf=new window.jspdf.jsPDF({orientation:'portrait',unit:'pt',format:'a4',compress:true});
-  pdf.setProperties({title:'Memoria de cálculo de la prensa mecánica',subject:'Sustituciones, iteraciones y diagramas',language:'es'});
+  pdf.setProperties({title:'Memoria de cálculo de la prensa mecánica',subject:'Sustituciones, iteraciones, decisiones y diagramas',language:'es'});
   const pageWidth=pdf.internal.pageSize.getWidth(), pageHeight=pdf.internal.pageSize.getHeight();
   const margin=46, width=pageWidth-2*margin, bottom=pageHeight-53;
   let y=54;
@@ -79,12 +79,14 @@ async function buildMemoryPdf(entries,format,onProgress) {
     y=54;
   }
 
+  const printText=value=>plainNumberNotation(value).replace(/₂/g,'2').replace(/ᵢ/g,'i');
+
   function paragraph(value,{size=10.5,bold=false,color='#202c26',gap=7,keep=0}={}){
     pdf.setFont('helvetica',bold?'bold':'normal');
     pdf.setFontSize(size);
     pdf.setTextColor(color);
     const lineHeight=size*1.28;
-    const lines=pdf.splitTextToSize(value.replace(/₂/g,'2').replace(/ᵢ/g,'i'),width);
+    const lines=pdf.splitTextToSize(printText(value),width);
     ensureRoom(lines.length*lineHeight+gap+keep);
     for(const line of lines){
       ensureRoom(lineHeight);
@@ -92,6 +94,62 @@ async function buildMemoryPdf(entries,format,onProgress) {
       y+=lineHeight;
     }
     y+=gap;
+  }
+
+  function decisionTable({title,trials,summary}){
+    const labels={selected:'Seleccionada',viable:'Viable',rejected:'Descartada'};
+    const size=9.5, lineHeight=12, horizontalPad=8, verticalPad=6;
+    const columns=[width*.20,width*.20,width*.60];
+
+    function measureRow(values,bold=false){
+      pdf.setFont('helvetica',bold?'bold':'normal');
+      pdf.setFontSize(size);
+      const cells=values.map((value,i)=>pdf.splitTextToSize(printText(value),columns[i]-2*horizontalPad));
+      const height=Math.max(...cells.map(lines=>lines.length))*lineHeight+2*verticalPad;
+      return {cells,bold,height};
+    }
+
+    function drawRow({cells,bold,height},fill){
+      pdf.setFillColor(fill);
+      pdf.setDrawColor('#ccd8d1');
+      pdf.setLineWidth(.45);
+      pdf.rect(margin,y,width,height,'FD');
+      pdf.setFont('helvetica',bold?'bold':'normal');
+      pdf.setFontSize(size);
+      pdf.setTextColor('#202c26');
+      let x=margin;
+      cells.forEach((lines,i)=>{
+        if(i>0) pdf.line(x,y,x,y+height);
+        lines.forEach((line,j)=>pdf.text(line,x+horizontalPad,y+verticalPad+j*lineHeight,{baseline:'top'}));
+        x+=columns[i];
+      });
+      y+=height;
+    }
+
+    const titleStyle={bold:true,size:12,gap:6,color:'#21594c'};
+    if(!trials.length){
+      paragraph(title,{...titleStyle,keep:24});
+      paragraph(summary||'La corrida no llegó a probar una medida.');
+      return;
+    }
+
+    const header=measureRow(['Medida','Resultado','Motivo'],true);
+    const rows=trials.map(({measure,reason,status})=>{
+      const selected=status==='selected';
+      return {row:measureRow([measure,labels[status],reason],selected),fill:selected?'#eaf5ee':'#ffffff'};
+    });
+    paragraph(title,{...titleStyle,keep:header.height+rows[0].row.height});
+    drawRow(header,'#edf2ee');
+    for(const {row,fill} of rows){
+      if(y+row.height>bottom){
+        ensureRoom(row.height);
+        paragraph(title+' · continuación',{...titleStyle,keep:header.height+row.height});
+        drawRow(header,'#edf2ee');
+      }
+      drawRow(row,fill);
+    }
+    y+=9;
+    if(summary) paragraph(summary,{size:9.5,color:'#4e655b'});
   }
 
   function vectorDiagram(diagram){
@@ -127,6 +185,8 @@ async function buildMemoryPdf(entries,format,onProgress) {
       y+=h+8;
     }else if(type==='diagram'){
       vectorDiagram(value);
+    }else if(type==='decision'){
+      decisionTable(value);
     }else if(type==='section'){
       if(index>0&&y>54) pdf.addPage();
       if(index>0) y=54;

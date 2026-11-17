@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#2d1052">
-  <title>Prensa mecánica · Diseño y memoria de cálculo</title>
+  <meta name="theme-color" content="#201832">
+  <title>Prensa mecánica · Diseño de elementos de máquinas</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
-  <link rel="stylesheet" href="interfaz.css?v=12">
+  <link rel="stylesheet" href="interfaz.css?v=17">
 </head>
 <body>
 <a class="skip" href="#contenido">Ir al contenido</a>
@@ -24,69 +24,159 @@
     </div>
   </div>
 </header>
-<main id="contenido" class="wrap">
-  <nav class="views" aria-label="Etapas y vistas del proyecto">
-    <a href="#resultados" data-view="resultados" aria-current="page">Resumen</a>
-    <a href="#etapa-1" data-view="etapa-1">Potencia</a>
-    <a href="#etapa-2" data-view="etapa-2">Banda y poleas</a>
-    <a href="#etapa-3" data-view="etapa-3">Engranes</a>
-    <a href="#etapa-4" data-view="etapa-4">Equilibrio</a>
-    <a href="#etapa-5" data-view="etapa-5">Flecha</a>
-    <a href="#etapa-6" data-view="etapa-6">Rodamientos</a>
-    <a href="#etapa-7" data-view="etapa-7">Resorte</a>
-    <a href="#etapa-8" data-view="etapa-8">Diagramas</a>
+<main id="contenido" class="wrap" tabindex="-1">
+  <nav class="views" aria-label="Vistas del proyecto">
+    <a href="#propuesta" data-view="propuesta" aria-current="page">Propuesta</a>
+    <a href="#resultados" data-view="resultados">Resultados</a>
+    <a href="#bitacora" data-view="bitacora">Bitácora</a>
     <a href="#catalogos" data-view="catalogos">Catálogos</a>
   </nav>
   <p id="status" role="status"></p>
-  <section id="resultados" class="view" aria-labelledby="results-title">
-    <div class="section-title">
-      <h2 id="results-title">Resultados del cálculo</h2>
-      <a class="button secondary" href="#etapa-1">Editar propuesta</a>
+  <section id="propuesta" class="view" aria-labelledby="proposal-title">
+    <div class="project-intro">
+      <div class="intro-copy">
+        <h2 id="proposal-title">Propuesta de diseño</h2>
+        <p>Dimensiona la transmisión de la prensa. Elige los materiales de catálogo y las dimensiones iniciales, luego calcula el conjunto en una sola corrida.</p>
+      </div>
+      <div class="project-context">
+        <strong>Caso precargado de la tarea</strong>
+        <dl>
+          <div><dt>Motor</dt><dd>2 100 rpm</dd></div>
+          <div><dt>Torque de salida</dt><dd>18 000 kgf·cm</dd></div>
+          <div><dt>Relación de banda</dt><dd>1.875 : 1</dd></div>
+        </dl>
+      </div>
     </div>
-    <div id="overview"></div>
-  </section>
-  <section id="datos" class="view" aria-labelledby="stage-title" hidden>
-    <h2 id="stage-title">Potencia y velocidades</h2>
-    <p id="stage-guidance" hidden></p>
-    <div id="stage-result"></div>
-    <div class="stage-workspace">
     <form id="inputs" novalidate>
-      <div class="editor">
-        <fieldset id="powerFields"><legend>Datos de potencia</legend></fieldset>
-        <fieldset id="beltFields" hidden><legend>Propuesta de banda y poleas</legend><label>Material propuesto · tabla 17-2<select name="belt"></select></label></fieldset>
-        <fieldset id="gearFields" hidden><legend>Propuesta de engranes</legend></fieldset>
-        <fieldset id="balanceFields" hidden><legend>Posiciones sobre la flecha</legend></fieldset>
-        <fieldset id="shaftFields" hidden><legend>Propuesta de flecha</legend></fieldset>
-        <fieldset id="bearingFields" hidden><legend>Datos de rodamientos</legend></fieldset>
-        <fieldset id="springFields" hidden><legend>Propuesta de brazo tensor y resorte</legend></fieldset>
-        <div class="actions">
-          <button type="submit">Calcular</button>
-          <button class="secondary" type="button" id="restore">Restaurar datos de la tarea</button>
-        </div>
+      <div class="proposal-grid">
+        <section class="proposal-group" id="propuesta-1" aria-labelledby="proposal-power">
+          <header class="proposal-heading">
+            <h3 id="proposal-power">Motor y carga</h3>
+            <p>Velocidad de entrada, torque requerido y motor nominal.</p>
+          </header>
+          <fieldset id="powerFields" aria-labelledby="proposal-power"></fieldset>
+        </section>
+        <section class="proposal-group" id="propuesta-2" aria-labelledby="proposal-belt">
+          <header class="proposal-heading">
+            <h3 id="proposal-belt">Banda y poleas</h3>
+            <p>Selecciona la banda y define la geometría base. La app busca el ancho y el rodillo.</p>
+          </header>
+          <fieldset id="beltFields" aria-labelledby="proposal-belt">
+            <label>Material propuesto · tabla 17-2<select name="belt"></select></label>
+          </fieldset>
+          <details class="proposal-properties" data-material-stage="2">
+            <summary>Propiedades de la banda</summary>
+            <div class="proposal-material"></div>
+          </details>
+        </section>
+        <section class="proposal-group" id="propuesta-3" aria-labelledby="proposal-gears">
+          <header class="proposal-heading">
+            <h3 id="proposal-gears">Engranes</h3>
+            <p>El paso diametral y los dientes fijan los diámetros primitivos. Los valores precargados reproducen 160 y 640 mm.</p>
+          </header>
+          <fieldset id="gearFields" aria-labelledby="proposal-gears"></fieldset>
+          <details class="proposal-properties" data-material-stage="3">
+            <summary>Propiedades del acero de engranes</summary>
+            <div class="proposal-material"></div>
+          </details>
+        </section>
+        <section class="proposal-group" id="propuesta-4" aria-labelledby="proposal-balance">
+          <header class="proposal-heading">
+            <h3 id="proposal-balance">Geometría de la flecha</h3>
+            <p>Posiciones medidas desde el apoyo 1 para calcular reacciones y momentos.</p>
+          </header>
+          <fieldset id="balanceFields" aria-labelledby="proposal-balance"></fieldset>
+        </section>
+        <section class="proposal-group" id="propuesta-5" aria-labelledby="proposal-shaft">
+          <header class="proposal-heading">
+            <h3 id="proposal-shaft">Flecha</h3>
+            <p>Elige el acero y el diámetro inicial. El cálculo comprueba los diámetros compatibles con los rodamientos.</p>
+          </header>
+          <fieldset id="shaftFields" aria-labelledby="proposal-shaft"></fieldset>
+          <details class="proposal-properties" data-material-stage="5">
+            <summary>Propiedades del acero de la flecha</summary>
+            <div class="proposal-material"></div>
+          </details>
+        </section>
+        <section class="proposal-group" id="propuesta-6" aria-labelledby="proposal-bearings">
+          <header class="proposal-heading">
+            <h3 id="proposal-bearings">Rodamientos</h3>
+            <p>Define la familia y la vida requerida para ambos apoyos.</p>
+          </header>
+          <fieldset id="bearingFields" aria-labelledby="proposal-bearings"></fieldset>
+          <details class="proposal-properties" data-material-stage="6">
+            <summary>Referencia de rodamientos</summary>
+            <div class="proposal-material"></div>
+          </details>
+        </section>
+        <section class="proposal-group" id="propuesta-7" aria-labelledby="proposal-spring">
+          <header class="proposal-heading">
+            <h3 id="proposal-spring">Brazo tensor y resorte</h3>
+            <p>Define el brazo y el resorte. El diámetro inicial del alambre sirve como punto de partida.</p>
+          </header>
+          <fieldset id="springFields" aria-labelledby="proposal-spring"></fieldset>
+          <details class="proposal-properties" data-material-stage="7">
+            <summary>Propiedades del alambre</summary>
+            <div class="proposal-material"></div>
+          </details>
+        </section>
+      </div>
+      <div class="proposal-actions">
+        <button type="button" class="secondary" id="restore">Restaurar datos de la tarea</button>
+        <button type="submit">Calcular toda la propuesta</button>
       </div>
     </form>
-    <div id="stage-material"></div>
+  </section>
+  <nav class="stage-nav" id="result-tabs" aria-label="Cálculos por etapa" hidden>
+    <a href="#resultados" data-stage="resultados">Resumen</a>
+    <a href="#etapa-1" data-stage="etapa-1">Potencia</a>
+    <a href="#etapa-2" data-stage="etapa-2">Banda y poleas</a>
+    <a href="#etapa-3" data-stage="etapa-3">Engranes</a>
+    <a href="#etapa-4" data-stage="etapa-4">Equilibrio</a>
+    <a href="#etapa-5" data-stage="etapa-5">Flecha</a>
+    <a href="#etapa-6" data-stage="etapa-6">Rodamientos</a>
+    <a href="#etapa-7" data-stage="etapa-7">Resorte</a>
+    <a href="#etapa-8" data-stage="etapa-8">Diagramas</a>
+  </nav>
+  <section id="resultados" class="view" aria-labelledby="results-title" hidden>
+    <div class="section-title">
+      <h2 id="results-title" tabindex="-1">Resultados de la propuesta</h2>
+      <a class="button secondary" href="#propuesta">Editar propuesta</a>
     </div>
-    <section id="memoria" aria-label="Desarrollo y diagramas">
-      <details id="stage-calculation">
-        <summary>Desarrollo del cálculo</summary>
-        <article id="memory" aria-label="Memoria de cálculo"></article>
-      </details>
+    <div id="overview"></div>
+    <section id="bitacora" aria-labelledby="decision-title">
+      <div class="section-title">
+        <h2 id="decision-title">Bitácora de decisiones</h2>
+      </div>
+      <p>Medidas evaluadas para la selección de cada componente. Las pestañas de resultados contienen las sustituciones e iteraciones de cálculo.</p>
+      <div id="decision-log" class="decision-grid"></div>
     </section>
   </section>
+  <section id="datos" class="view" aria-labelledby="stage-title" hidden>
+    <div class="section-title">
+      <h2 id="stage-title">Potencia y velocidades</h2>
+      <a id="edit-stage" class="button secondary" href="#propuesta-1">Editar datos de esta etapa</a>
+    </div>
+    <div id="stage-result"></div>
+    <div id="stage-material"></div>
+    <details id="stage-calculation">
+      <summary>Desarrollo del cálculo</summary>
+      <article id="memory" aria-label="Memoria de cálculo"></article>
+    </details>
+  </section>
   <section id="catalogos" class="view" aria-labelledby="catalog-title" hidden>
-    <h2 id="catalog-title">Catálogos</h2>
+    <h2 id="catalog-title">Catálogos de referencia</h2>
     <div id="catalog-tables"></div>
   </section>
 </main>
 <script src="catalogos.js?v=12"></script>
 <script src="tensor.js?v=6"></script>
-<script src="motor.js?v=16"></script>
-<script src="transmision.js?v=16"></script>
-<script src="resorte.js?v=16"></script>
+<script src="motor.js?v=17"></script>
+<script src="transmision.js?v=17"></script>
+<script src="resorte.js?v=17"></script>
 <script src="diagramas.js?v=16"></script>
-<script src="memoria-pdf.js?v=8"></script>
+<script src="memoria-pdf.js?v=17"></script>
 <script src="materiales.js?v=16"></script>
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>
