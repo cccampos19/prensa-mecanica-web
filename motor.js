@@ -180,7 +180,7 @@ function calculate(c) {
     const mid=final.states[50];
     const maximumGrip=Math.max(...final.states.map(s=>(s.tight-final.centrifugal)/((s.slack-final.centrifugal)*Math.exp(friction*Math.min(s.wrapMotor,s.wrapDriven)))));
     check(maximumGrip>0&&maximumGrip<=1+1e-9,'La banda pierde condición de tracción en el recorrido.');
-    eq(math`\max_jrac{F_{1,j}-F_c}{(F_{2,j}-F_c)e^{\mu\min(	heta_{m,j},	heta_{c,j})}}=${n(maximumGrip,6)}\le 1`);
+    eq(math`\max_j\frac{F_{1,j}-F_c}{(F_{2,j}-F_c)e^{\mu\min(\theta_{m,j},\theta_{c,j})}}=${n(maximumGrip,6)}\le 1`);
     eq(math`F_y=F_1\cos\gamma_t+F_2\cos\gamma_{f,c}=${n(mid.tight)}\cos(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\cos(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fy)}`);
     eq(math`F_z=F_1\sin\gamma_t+F_2\sin\gamma_{f,c}=${n(mid.tight)}\sin(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\sin(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fz)}`);
     eq(math`|\mathbf F|=\sqrt{(${n(mid.fy)})^2+(${n(mid.fz)})^2}=${force(Math.hypot(mid.fy,mid.fz))}`);

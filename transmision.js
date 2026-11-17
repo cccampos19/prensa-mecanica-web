@@ -186,8 +186,8 @@ function finishDesign(c, power, belt, add, check) {
   heading('Envolvente con el tensor');
   text('Se repite el equilibrio anterior en 101 posiciones. La selección de rodamientos y el dimensionamiento usan los máximos de reacción y momento de cada sección.');
   critical.forEach((state,i)=>{
-    const label=['F_{r1}','F_{r4}','M_2','M_3'][i];
-    eq(math`${label}_{,\max}=${i<2?force(state.values[i]):moment(state.values[i])};\quad \phi=${n(state.angle)}^\circ`);
+    const label=['F_{r1,\\max}','F_{r4,\\max}','M_{2,\\max}','M_{3,\\max}'][i];
+    eq(math`${label}=${i<2?force(state.values[i]):moment(state.values[i])};\quad \phi=${n(state.angle)}^\circ`);
   });
 
   section('Dimensionamiento de la flecha');

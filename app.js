@@ -161,6 +161,10 @@ function render(entries) {
 }
 
 function formatEquation(value) {
+  const parts = value.split(/;\\quad\s*/);
+  if (parts.length > 1 && value.length > 120) {
+    return '\\begin{gathered}\n' + parts.join(' \\\\\n') + '\n\\end{gathered}';
+  }
   const terms = value.split('=');
   if (value.length <= 112 || terms.length < 3 || value.includes(';') ||
       value.includes('\\ge ') || value.includes('\\le ')) return value;
@@ -169,7 +173,7 @@ function formatEquation(value) {
 }
 
 function tex(entries) {
-  const escape = value => value.replace(/[#$%&_{}]/g, character => '\\' + character);
+  const escape = value => value.replace(/[#$%&_{}]/g, character => '\\' + character).replace(/–/g,'--').replace(/·/g,'\\textperiodcentered{}');
   return [
     '\\documentclass[11pt]{article}',
     '\\usepackage[T1]{fontenc}',
