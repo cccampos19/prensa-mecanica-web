@@ -12,7 +12,9 @@ const defaults = {
   gearSteel:17, gearFinish:1, x2:120, x3:320, span:620,
   shaftSteel:17, shaftFinish:1, shaftStart:40, fillet:.1, kc:.59, ktFlex:1.7,
   ktTors:1.4, shaftFat:2, shaftStatic:2, temperature:20, reliability:99,
-  bearingType:0, life:20000, bearingStatic:1.5
+  bearingType:0, life:20000, bearingStatic:1.5,
+  wire:0, travel:20, mount:190, idlerLever:230, springLever:150,
+  turnMin:12, turnMax:22, preload:35, springIndex:8, springSafety:2, hookRadius:4
 };
 const fields = {
   powerFields: [
@@ -41,7 +43,15 @@ const fields = {
     ['temperature','Temperatura de servicio (°C) · flecha y engranes'],
     ['reliability','Confiabilidad de fatiga (%) · flecha y engranes']
   ],
-  bearingFields: [['life','Vida L10 solicitada (h)'], ['bearingStatic','Seguridad estática']]
+  bearingFields: [['life','Vida L10 solicitada (h)'], ['bearingStatic','Seguridad estática']],
+  springFields: [
+    ['travel','Recorrido axial del resorte (mm)'], ['mount','Distancia entre anclajes al inicio (mm)'],
+    ['idlerLever','Brazo efectivo de la polea tensora (mm)'], ['springLever','Brazo efectivo del resorte (mm)'],
+    ['turnMin','Desvío mínimo de la banda (°)'], ['turnMax','Desvío máximo de la banda (°)'],
+    ['preload','Tensión inicial de fabricación (% de la carga mínima)'],
+    ['springIndex','Índice del resorte D/d'], ['springSafety','Factor de seguridad'],
+    ['hookRadius','Radio medio del gancho / d']
+  ]
 };
 
 for (const [group, definitions] of Object.entries(fields)) {
@@ -69,6 +79,8 @@ for (const [group, prefix] of [['gearFields','gear'],['shaftFields','shaft']]) {
   addSelect(group,prefix+'Steel','Acero',steels.map(steel=>steel.label));
 }
 addSelect('bearingFields','bearingType','Tipo · serie 02',['Ranura profunda','Contacto angular']);
+
+addSelect('springFields','wire','Alambre · tablas 10-4 y 10-5',springWires.map(wire=>wire.name));
 
 const select = form.elements.belt;
 catalog.forEach(([name, , minimum], index) => {
@@ -189,8 +201,8 @@ function run() {
   render(current.entries);
   calculationStatus.textContent = current.error
     ? 'Propuesta incompleta. Revisa la anotación en la memoria.'
-    : 'Memoria completa · seis etapas calculadas.';
-  download.disabled = !current.design;
+    : 'Memoria completa · siete etapas calculadas.';
+  download.disabled = !current.spring;
 }
 form.addEventListener('submit', event => {
   event.preventDefault();

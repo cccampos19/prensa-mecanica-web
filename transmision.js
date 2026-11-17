@@ -281,6 +281,5 @@ function finishDesign(c, power, belt, add, check) {
     eq(math`r_{filete}=${mm(fillet)}>r_{\max}=${mm(rmax)}`);
     note('Interferencia de filete. Propuesta de montaje: espaciador de '+n(spacer)+' mm, chaflán interior de al menos '+n(chamfer)+' mm y radio de borde de 1 mm. Verificar el detalle en el plano.');
   }
-  note('El resorte y el brazo tensor quedan pendientes.');
-  return {module,faceMm, wt, wr, loads, moments, continuous, diameter};
+  return {module,faceMm, wt, wr, loads, moments, continuous, diameter,kd,ke};
 }

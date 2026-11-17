@@ -181,10 +181,12 @@ function calculate(c) {
     eq(math`F_y=F_{\parallel}\cos\beta-F_{\perp}\sin\beta=(${n(axial)})\cos(${n(c.angle)}^\circ)-(${n(transverse)})\sin(${n(c.angle)}^\circ)=${force(fy)}`);
     eq(math`F_z=F_{\parallel}\sin\beta+F_{\perp}\cos\beta=(${n(axial)})\sin(${n(c.angle)}^\circ)+(${n(transverse)})\cos(${n(c.angle)}^\circ)=${force(fz)}`);
     eq(math`|\mathbf F|=\sqrt{F_y^2+F_z^2}=\sqrt{(${n(fy)})^2+(${n(fz)})^2}=${force(Math.hypot(fy,fz))}`);
-    add('note', 'La carga corresponde a las tensiones de la banda abierta. El efecto del brazo tensor y del resorte queda pendiente.');
+    add('note', 'La carga corresponde a las tensiones de la banda abierta. El efecto de la polea auxiliar sobre la dirección de esta carga queda fuera del modelo de banda abierta.');
     belt = {selected, speed, length, capacity, ...final, fy, fz};
     const design = finishDesign(c, power, belt, add, check);
-    return {entries, power, belt, design, iterations};
+    add('section','Brazo tensor y resorte de tensión');
+    const spring = springDesign(c, belt, design.kd, design.ke, add, check);
+    return {entries, power, belt, design, spring, iterations};
   } catch (error) {
     add('note', error.message);
     return {entries, power, belt, iterations, error: error.message};
