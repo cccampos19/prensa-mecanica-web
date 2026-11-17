@@ -9,7 +9,7 @@ const pdfStatus=document.querySelector('#pdf-status');
 let generatingPdf=false;
 const defaults = {
   rpm: 2100, ratio: 1.875, load: 18000, pinion: 160, gear: 640,
-  gearEff: 97, beltEff: 94, nominal: 75, pulley: 300, centers: 0.90,
+  gearEff: 100, beltEff: 100, nominal: 75, pulley: 300, centers: 0.90,
   start: 200, angle: 60, belt: 9,
   np:20, ng:80, phi:20, yp:.322, yg:.426, ktGear:1.8, gearFat:2, gearStatic:4,
   gearSteel:17, gearFinish:1, x2:120, x3:320, span:620,

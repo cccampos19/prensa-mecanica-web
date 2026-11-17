@@ -46,7 +46,8 @@ function calculate(c) {
     add('heading', 'Datos del enunciado y del plano');
     eq(math`n_m=${display(c.rpm,'rpm')};\quad i_b=${n(c.ratio)};\quad T_s=${display(c.load,'kgf\\,cm')}`);
     eq(math`d_p=${mm(c.pinion/1000)};\quad d_g=${mm(c.gear/1000)}`);
-    add('heading', 'Propuesta');
+    add('heading', 'Hipótesis de pérdidas y propuesta de motor');
+    add('text', 'El enunciado escrito especifica un torque de salida. Para el caso de la tarea se supone una transmisión sin pérdidas porque el texto no da eficiencias ni pérdidas. Si editas una eficiencia, se aplica el valor indicado a esa etapa.');
     eq(math`\eta_b=${n(c.beltEff/100)};\quad\eta_g=${n(c.gearEff/100)};\quad P_{nom}=${kw(c.nominal*1000)}`);
     add('text', 'Método de clase: relaciones de transmisión y potencia mecánica (apuntes, pp. 28, 30 y 41–42).');
     add('heading', 'Cadena de velocidades');
