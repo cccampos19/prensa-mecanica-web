@@ -97,7 +97,6 @@ async function buildMemoryPdf(entries,format,onProgress) {
   }
 
   function decisionTable({title,trials,summary}){
-    const labels={selected:'Seleccionada',viable:'Viable',rejected:'Descartada'};
     const size=9.5, lineHeight=12, horizontalPad=8, verticalPad=6;
     const columns=[width*.20,width*.20,width*.60];
 
@@ -136,7 +135,7 @@ async function buildMemoryPdf(entries,format,onProgress) {
     const header=measureRow(['Medida','Resultado','Motivo'],true);
     const rows=trials.map(({measure,reason,status})=>{
       const selected=status==='selected';
-      return {row:measureRow([measure,labels[status],reason],selected),fill:selected?'#eaf5ee':'#ffffff'};
+      return {row:measureRow([measure,decisionLabels[status],reason],selected),fill:selected?'#eaf5ee':'#ffffff'};
     });
     paragraph(title,{...titleStyle,keep:header.height+rows[0].row.height});
     drawRow(header,'#edf2ee');

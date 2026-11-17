@@ -50,7 +50,7 @@ function bandMaterial(values,result) {
     rows.push(['Densidad calculada',materialUnit(Math.round(density(weightUsed)),'kg/m³')]);
   }
   if(result?.belt?.selected) {
-    rows.push(['Ancho de la propuesta',materialUnit(result.belt.selected*1000,'mm')]);
+    rows.push([result.belt.review.fixedWidth?'Ancho fijo de tabla':'Ancho mínimo calculado',materialUnit(result.belt.selected*1000,'mm')]);
     rows.push(['Velocidad del caso',materialUnit(Math.round(result.belt.review.operatingFpm),'ft/min')]);
   }
   const note=minPulley==null
@@ -126,7 +126,7 @@ function springWireMaterial(values,result){
     const d=selected/25.4;
     const i=d<=.032?0:d<=.063?1:d<=.125?2:3;
     properties.push(
-      ['Diámetro del alambre seleccionado',materialUnit(selected,'mm')],
+      ['Diámetro del alambre calculado',materialUnit(selected,'mm')],
       ['Sut estimado para ese diámetro',materialUnit(Math.round(sut),'MPa')],
       ['Límite en tensión usado en estática',materialUnit(Math.round(wire.sy*sut),'MPa')],
       ['Límite en torsión usado en estática',materialUnit(Math.round(wire.shear*sut),'MPa')],

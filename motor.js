@@ -89,7 +89,7 @@ function calculate(c) {
     add('heading', 'Comprobación del motor nominal');
     const motorFits = c.nominal * 1000 >= motorPower;
     const motorDecision=decision(1,'Potencia nominal del motor','kW','Potencia mecánica requerida de '+n(motorPower/1000)+' kW.');
-    trial(motorDecision,c.nominal,motorFits?'selected':'rejected',motorFits
+    trial(motorDecision,c.nominal,motorFits?'verified':'rejected',motorFits
       ?'La potencia nominal cubre la potencia calculada.'
       :'La potencia nominal queda por debajo de la potencia calculada.');
     eq(math`P_{nom}=${kw(c.nominal*1000)}${motorFits ? '\\ge ' : '<'}P_m=${kw(motorPower)}`);
@@ -103,9 +103,10 @@ function calculate(c) {
     check(Number.isFinite(c.angle), 'Ingresa la orientación de la carga.');
     const row = catalog[c.belt];
     check(row, 'Selecciona una banda del catálogo.');
-    const [name, thicknessIn, minimumIn, allowableIn, listedWeight, friction] = row;
+    const [name, thicknessIn, minimumIn, allowableIn, listedWeight, friction, fixedWidthIn, shape] = row;
     const weightIn = Array.isArray(listedWeight) ? Math.max(...listedWeight) : listedWeight;
-    check(minimumIn, name + (name.includes('redondo') ? ' requiere un método de banda redonda.' : ' requiere consultar el diámetro mínimo en la tabla 17-3.'));
+    check(shape==='plana', name+' requiere un método de banda redonda.');
+    check(minimumIn, name+' requiere consultar el diámetro mínimo en la tabla 17-3.');
     const thickness = thicknessIn * inch;
     const density = weightIn * lbf / inch ** 3 / gravity;
     const allowable = allowableIn * lbf / inch;
@@ -116,7 +117,7 @@ function calculate(c) {
     const tightAngle=c.angle*Math.PI/180+Math.asin((driven-driver)/(2*c.centers));
     check(Number.isFinite(c.springRate)&&c.springRate>0,'La rigidez propuesta del resorte debe ser positiva.');
     add('heading', 'Propuesta y datos de catálogo');
-    add('text', name + ' · tabla 17-2. Se conservan el material, la relación de transmisión, la polea conducida y la distancia entre centros. Se iteran el rodillo y el ancho de banda.');
+    add('text', name + ' · tabla 17-2. Se verifican las poleas y el rodillo propuestos. El ancho se toma de la fila si es fijo o se dimensiona con la tensión por unidad de ancho.');
     eq(math`D=${mm(driven)};\quad C=${mm(c.centers)};\quad \beta=${n(c.angle)}^\circ`);
     eq(math`t=${mm(thickness)};\quad \mu=${n(friction)};\quad d_{min}=${mm(minimumIn*inch)}`);
     eq(math`S_{perm}=${display(allowableIn,'lbf/in')}(4.448221615/0.0254)=${display(allowable,'N/m')}`);
@@ -126,55 +127,34 @@ function calculate(c) {
     eq(math`d=D/i_b=${n(driven)}/${n(c.ratio)}=${mm(driver)}`);
     eq(math`d_{menor}=${mm(small)}${small >= minimumIn*inch ? '\\ge ' : '<'}d_{min}=${mm(minimumIn*inch)}`);
     const pulleyDecision=decision(2,'Diámetro de la polea menor','mm','Polea motriz de '+n(driver*1000)+' mm y conducida de '+n(driven*1000)+' mm con '+name+'.');
-    trial(pulleyDecision,small*1000,small>=minimumIn*inch?'selected':'rejected',
+    trial(pulleyDecision,small*1000,small>=minimumIn*inch?'verified':'rejected',
       (small>=minimumIn*inch?'Cumple el mínimo de ':'Queda por debajo del mínimo de ')+n(minimumIn*inch*1000)+' mm de la tabla 17-2.');
     if(small<minimumIn*inch){
       const minimumDriven=minimumIn*inch*Math.max(1,c.ratio);
       check(false,'La polea menor queda por debajo del mínimo de la tabla 17-2 para '+name+'. A esta relación se requiere una polea conducida de al menos '+n(minimumDriven*1000)+' mm, antes de verificar el espacio del tensor.');
     }
-    add('heading','Selección del diámetro del rodillo');
+    add('heading','Comprobación del diámetro del rodillo propuesto');
     const minRoller=1000*minimumIn*inch;
     const maxRoller=300-driver*1000;
-    const proposed=2*c.idlerRadius;
-    const rollerDecision=decision(2,'Diámetro del rodillo tensor','mm','Se prueba el diámetro inicial de '+n(proposed)+' mm y alternativas separadas por 2 mm, en orden de proximidad. La contraflexión está pendiente de verificación.');
-    add('text','Diámetro inicial del rodillo de '+n(proposed)+' mm. Las alternativas están separadas por 2 mm y se prueban de la más cercana a la más lejana. La disponibilidad depende del proveedor.');
-    check(minRoller<maxRoller,'Con '+name+', el rodillo debe medir al menos '+n(minRoller)+' mm según la referencia de la tabla 17-2 y menos de '+n(maxRoller)+' mm por el espacio entre el pivote y el rodillo.');
-    const alternatives=[];
-    for(let trial=Math.ceil(minRoller/2)*2;trial<maxRoller;trial+=2) {
-      if(trial!==proposed) alternatives.push(trial);
+    const rollerDiameter=2*c.idlerRadius;
+    const rollerRange='La referencia geométrica de la tabla 17-2 es '+n(minRoller)+' mm. El montaje exige un diámetro inferior a '+n(maxRoller)+' mm.';
+    const rollerDecision=decision(2,'Diámetro del rodillo tensor','mm',rollerRange+' La contraflexión está pendiente de verificación.');
+    add('text','El diámetro propuesto es '+n(rollerDiameter)+' mm. '+rollerRange);
+    if(rollerDiameter<minRoller||rollerDiameter>=maxRoller){
+      const reason='El rodillo de '+n(rollerDiameter)+' mm queda fuera del intervalo de referencia y montaje. '+rollerRange;
+      trial(rollerDecision,rollerDiameter,'rejected',reason);
+      check(false,reason);
     }
-    alternatives.sort((a,b)=>Math.abs(a-proposed)-Math.abs(b-proposed));
-    const candidates=[proposed,...alternatives];
-    let geometry, rollerDiameter, rejection;
-    for(const diameter of candidates){
-      add('iteration','Candidato de rodillo · '+n(diameter)+' mm');
-      if(diameter<minRoller){
-        const reason='El diámetro queda por debajo del mínimo de referencia de '+n(minRoller)+' mm de la tabla 17-2.';
-        add('text',reason);
-        trial(rollerDecision,diameter,'rejected',reason);
-        continue;
-      }
-      if(diameter>=maxRoller){
-        const reason='El diámetro supera el espacio disponible entre la polea motriz y el rodillo.';
-        add('text',reason);
-        trial(rollerDecision,diameter,'rejected',reason);
-        continue;
-      }
-      try {
-        geometry=tensorGeometry({...c,idlerRadius:diameter/2},driven,driver,tightAngle,check);
-      } catch(error) {
-        rejection=error.message;
-        add('text',rejection);
-        trial(rollerDecision,diameter,'rejected',rejection);
-        continue;
-      }
-      rollerDiameter=diameter;
-      const reason='Cumple el mínimo geométrico de referencia y conserva contacto en el recorrido.';
-      add('text',reason);
-      trial(rollerDecision,diameter,'selected',reason);
-      break;
+    let geometry;
+    try {
+      geometry=tensorGeometry(c,driven,driver,tightAngle,check);
+    } catch(error) {
+      trial(rollerDecision,rollerDiameter,'rejected',error.message+' '+rollerRange);
+      throw error;
     }
-    check(geometry,'La selección del rodillo no tiene solución geométrica. '+(rejection||'El mínimo de tabla excede el espacio disponible.'));
+    const rollerFits='El diámetro propuesto cumple la referencia geométrica y conserva contacto en el recorrido.';
+    add('text',rollerFits);
+    trial(rollerDecision,rollerDiameter,'verified',rollerFits);
     add('text','El texto del enunciado fija 2100 rpm y 18000 kgf·cm para el caso de la tarea. El plano se usa para la geometría y muestra rotulados 1800 rpm y 15000 kgf·cm.');
     const nominal=geometry[50], smallWrap=nominal.wrapMotor, largeWrap=nominal.wrapDriven;
     const length=nominal.length;
@@ -194,8 +174,12 @@ function calculate(c) {
     eq(math`R_{\lim}=e^{\mu\min(\theta_m,\theta_c)}=e^{(${n(friction)})(${n(Math.min(smallWrap,largeWrap),5)})}=${n(ratio,5)}`);
 
     const centrifugalPerWidth=density*thickness*speed**2;
-    const widthDecision=decision(2,'Ancho de la banda','mm','Se prueban incrementos de diseño de 10 mm con '+name+'. La referencia de tensión de la tabla 17-2 corresponde a 600 ft/min.');
-    check(centrifugalPerWidth<allowable,'Para '+name+', la tensión centrífuga por unidad de ancho supera o iguala la referencia de la tabla 17-2. Aumentar el ancho no resuelve la propuesta.');
+    const fixedWidth=fixedWidthIn==null?null:fixedWidthIn*inch;
+    const widthDecision=decision(2,'Ancho de la banda','mm',name+'. La referencia de tensión de la tabla 17-2 corresponde a 600 ft/min. '
+      +(fixedWidth==null?'La fila da tensión por unidad de ancho. El resultado es un mínimo calculado para consultar disponibilidad.':'Se verifica el ancho fijo de la fila.'));
+    if(fixedWidth==null){
+      check(centrifugalPerWidth<allowable,'Para '+name+', la tensión centrífuga por unidad de ancho supera o iguala la referencia de la tabla 17-2. Aumentar el ancho no resuelve la propuesta.');
+    }
     const tension = width => {
       const centrifugal = centrifugalPerWidth * width;
       const states=tensorLoads(geometry,delta,centrifugal,friction,c.springRate,tightAngle);
@@ -212,67 +196,81 @@ function calculate(c) {
     }
     add('text','a es la razón de brazos efectivos obtenida del equilibrio de momentos en el pivote. La precarga instalada mínima se escoge para transmitir la potencia sin deslizamiento en 101 posiciones del recorrido con la rigidez propuesta.');
 
-    add('heading', 'Dimensionamiento iterativo del ancho');
-    add('text', 'Se calcula con cifras completas y se muestran valores redondeados. El criterio de convergencia es un error relativo menor al 3 %.');
-    let width = c.start / 1000;
-    let error = Infinity;
-    for (let k = 1; k <= 100 && error >= tolerance; k++) {
-      const tensions = tension(width);
-      const next = tensions.tight / allowable;
-      error = 100 * Math.abs(next - width) / next;
-      check(Number.isFinite(error), 'La propuesta produjo valores fuera del rango numérico.');
-      iterations.push({width, next, error, centrifugal:tensions.centrifugal, slack:tensions.slack, tight:tensions.tight});
-      add('iteration', 'Iteración ' + k);
-      eq(math`b_{${k}}=${mm(width)}`);
-      showTensions(width, tensions);
-      eq(math`b_{nuevo}=\frac{F_1}{S_{perm}}=\frac{${n(tensions.tight)}}{${n(allowable)}}=${mm(next)}`);
-      eq(math`\varepsilon=\left|\frac{b_{nuevo}-b_{${k}}}{b_{nuevo}}\right|100=\left|\frac{${n(next,8)}-${n(width,8)}}{${n(next,8)}}\right|100=${n(error,5)}\,\%`);
-      add('text', error < tolerance ? 'Cumple el criterio de convergencia.' : 'Se usa el ancho calculado en la siguiente iteración.');
-      width = next;
+    let selected=fixedWidth;
+    if(fixedWidth==null){
+      add('heading', 'Dimensionamiento iterativo del ancho');
+      add('text', 'Se calcula con cifras completas y se muestran valores redondeados. El criterio de convergencia es un error relativo menor al 3 %.');
+      let width = c.start / 1000;
+      let error = Infinity;
+      for (let k = 1; k <= 100 && error >= tolerance; k++) {
+        const tensions = tension(width);
+        const next = tensions.tight / allowable;
+        error = 100 * Math.abs(next - width) / next;
+        check(Number.isFinite(error), 'La propuesta produjo valores fuera del rango numérico.');
+        iterations.push({width, next, error, centrifugal:tensions.centrifugal, slack:tensions.slack, tight:tensions.tight});
+        add('iteration', 'Iteración ' + k);
+        eq(math`b_{${k}}=${mm(width)}`);
+        showTensions(width, tensions);
+        eq(math`b_{nuevo}=\frac{F_1}{S_{perm}}=\frac{${n(tensions.tight)}}{${n(allowable)}}=${mm(next)}`);
+        eq(math`\varepsilon=\left|\frac{b_{nuevo}-b_{${k}}}{b_{nuevo}}\right|100=\left|\frac{${n(next,8)}-${n(width,8)}}{${n(next,8)}}\right|100=${n(error,5)}\,\%`);
+        add('text', error < tolerance ? 'Cumple el criterio de convergencia.' : 'Se usa el ancho calculado en la siguiente iteración.');
+        width = next;
+      }
+      check(error < tolerance, 'El ancho no convergió después de 100 iteraciones.');
+
+      add('heading', 'Ancho mínimo de cálculo');
+      add('text','Para comprobar la aproximación iterativa se despeja el límite exacto del modelo en las 101 posiciones. La precarga inicial es el máximo de las demandas de montaje de cada posición j. En cada posición i, la tensión del ramal tenso debe cumplir incluso para la demanda de precarga que gobierne.');
+      const positions=geometry.map(({lever,len,wrapMotor,wrapDriven})=>{
+        const springIncrement=c.springRate*1000*(len-geometry[0].len);
+        const slackWithoutCentrifugal=delta/Math.expm1(friction*Math.min(wrapMotor,wrapDriven));
+        return {lever,springIncrement,preloadIntercept:lever*slackWithoutCentrifugal-springIncrement};
+      });
+      let lower=0, upper=Infinity, governingIntercept, governingSlope;
+      for(const loaded of positions){
+        for(const preload of positions){
+          const intercept=(preload.preloadIntercept+loaded.springIncrement)/loaded.lever+delta;
+          const slope=centrifugalPerWidth*preload.lever/loaded.lever;
+          const margin=allowable-slope;
+          if(margin>0){
+            const bound=intercept/margin;
+            if(bound>lower){
+              lower=bound;
+              governingIntercept=intercept;
+              governingSlope=slope;
+            }
+          }else if(margin<0){
+            upper=Math.min(upper,intercept/margin);
+          }else{
+            check(intercept<=0,'La tensión de referencia es insuficiente para la geometría del tensor.');
+          }
+        }
+      }
+      check(Number.isFinite(lower)&&lower>0&&lower<=upper,'La tensión de referencia no admite un ancho compatible con todo el recorrido del tensor.');
+      selected=lower;
+      eq(math`F_{1,ij}(b)=A_{ij}+B_{ij}b\le S_{perm}b;\quad B_{ij}=\rho tv^2\frac{a_j}{a_i}`);
+      eq(math`A_{ij}=\frac{a_j\Delta F/(e^{\mu\theta_j}-1)-k(L_j-L_0)+k(L_i-L_0)}{a_i}+\Delta F;\quad\theta_j=\min(\theta_{m,j},\theta_{c,j})`);
+      eq(math`b_{\min}=\frac{A_{ij}}{S_{perm}-B_{ij}}=\frac{${n(governingIntercept,5)}}{${n(allowable,5)}-${n(governingSlope,5)}}=${mm(selected)}`);
+      add('note','La tabla 17-2 aporta las propiedades de esta banda y la tensión de referencia. Consulta al proveedor por los anchos disponibles que cubran el mínimo calculado.');
     }
-    add('heading', 'Selección y comprobación final');
-    check(error < tolerance, 'El ancho no convergió después de 100 iteraciones.');
-    add('text','Se prueban anchos en incrementos de diseño de 10 mm. La tabla 17-2 da la tensión por unidad de ancho. La disponibilidad de la medida resultante depende del proveedor.');
-    const fitsWidth = candidate => !(name.startsWith('Cuero') && [6,9].includes(minimumIn) &&
-      candidate>=8*inch && Math.min(small,rollerDiameter/1000)<(minimumIn+2)*inch);
-    function logWidth(candidate, tensions) {
-      const capacity=allowable*candidate;
-      const tensionOk=tensions.tight<=capacity+1e-9;
-      const geometryOk=fitsWidth(candidate);
-      const reason='Demanda de '+n(tensions.tight,1)+' N frente a '+n(capacity,1)+' N de capacidad de referencia. '
-        +(tensionOk?'Cumple tensión.':'Capacidad insuficiente.')+' '
-        +(geometryOk?'Cumple la geometría de referencia.':'La nota a de la tabla 17-2 exige un diámetro de polea mayor.');
-      return trial(widthDecision,candidate*1000,tensionOk&&geometryOk?'viable':'rejected',reason);
-    }
-    let provisional = Math.ceil(width*100-1e-9);
-    let final = tension(provisional/100);
-    for(let attempt=0; final.tight>allowable*provisional/100+1e-9 && attempt<100;attempt++){
-      add('text','Se prueba '+n(provisional*10)+' mm: la demanda supera la referencia de la tabla 17-2.');
-      logWidth(provisional/100,final);
-      provisional++;
-      final=tension(provisional/100);
-    }
-    const nominalWidthTrial=logWidth(provisional/100,final);
-    check(fitsWidth(provisional/100),'La nota a de la tabla 17-2 exige aumentar 2 in el diámetro mínimo de esta banda de cuero ancha.');
-    check(final.tight<=allowable*provisional/100+1e-9,'No se encontró ancho compatible tras redondear.');
-    const nextWidth=(provisional+1)/100;
-    const nextTension=tension(nextWidth);
-    const reserveWidthTrial=logWidth(nextWidth,nextTension);
-    const useReserve=reserveWidthTrial.status==='viable';
-    const selectedWidthTrial=useReserve?reserveWidthTrial:nominalWidthTrial;
-    const selected=useReserve?nextWidth:provisional/100;
-    if(useReserve) final=nextTension;
-    add('text',useReserve
-      ? 'El ancho mínimo redondeado que cumple frente a la referencia es '+n(provisional*10)+' mm. Se adopta el siguiente incremento de 10 mm, '+n(selected*1000)+' mm, como reserva provisional.'
-      : 'El incremento adicional de 10 mm incumple un criterio geométrico o de capacidad; se conserva el ancho mínimo compatible de '+n(selected*1000)+' mm.');
-    add('note','La reserva de ancho reduce la demanda por unidad de ancho calculada. No sustituye la tensión admisible a la velocidad real ni la verificación de contraflexión.');
+
+    add('heading', 'Comprobación final del ancho');
+    const final=tension(selected);
+    const capacity=allowable*selected;
+    const tensionOk=final.tight<=capacity+1e-9;
+    const geometryOk=!(name.startsWith('Cuero') && [6,9].includes(minimumIn)
+      && selected>=8*inch && Math.min(small,rollerDiameter/1000)<(minimumIn+2)*inch);
+    const selectedWidthTrial=trial(widthDecision,selected*1000,
+      tensionOk&&geometryOk?(fixedWidth==null?'calculated':'selected'):'rejected',
+      'Demanda de '+n(final.tight,1)+' N frente a '+n(capacity,1)+' N de capacidad de referencia. '
+      +(tensionOk?'Cumple tensión.':'Capacidad insuficiente.')+' '
+      +(geometryOk?'Cumple la geometría de referencia.':'La nota a de la tabla 17-2 exige un diámetro de polea mayor.'));
+    check(geometryOk,'La nota a de la tabla 17-2 exige aumentar 2 in el diámetro mínimo de esta banda de cuero ancha.');
     showTensions(selected, final);
     eq(math`T_{mot}=\Delta F\frac{d}{2}=(${n(delta)})\frac{${n(driver)}}{2}=${torque(delta*driver/2)}`);
     eq(math`\frac{F_c}{F_1}100=\frac{${n(final.centrifugal)}}{${n(final.tight)}}100=${n(100*final.centrifugal/final.tight)}\,\%`);
-    const capacity = allowable * selected;
     eq(math`F_{perm}=S_{perm}b=(${n(allowable)})(${n(selected)})=${force(capacity)}`);
-    eq(math`F_1=${force(final.tight)}${final.tight <= capacity ? '\\le ' : '>'}F_{perm}=${force(capacity)}`);
-    check(final.tight <= capacity + 1e-9, 'El ancho redondeado supera la tensión de referencia de la tabla 17-2.');
+    eq(math`F_1=${force(final.tight)}${tensionOk ? '\\le ' : '>'}F_{perm}=${force(capacity)}`);
+    check(tensionOk, 'El ancho supera la tensión de referencia de la tabla 17-2.');
     add('heading','Carga sobre la polea conducida con el tensor');
     add('text','En la polea conducida actúan las dos tensiones en sus direcciones tangentes locales. La reacción de la polea auxiliar va a su pivote.');
     const mid=final.states[50];
@@ -283,10 +281,6 @@ function calculate(c) {
       selectedWidthTrial.reason+=' La banda pierde tracción en el recorrido.';
     }
     check(gripOk,'La banda pierde condición de tracción en el recorrido.');
-    selectedWidthTrial.status='selected';
-    selectedWidthTrial.reason+=useReserve
-      ?' Se elige un incremento adicional como reserva provisional.'
-      :' Se conserva el menor ancho compatible porque la reserva se descartó.';
     eq(math`\max_j\frac{F_{1,j}-F_c}{(F_{2,j}-F_c)e^{\mu\min(\theta_{m,j},\theta_{c,j})}}=${n(maximumGrip,6)}\le 1`);
     eq(math`F_y=F_1\cos\gamma_t+F_2\cos\gamma_{f,c}=${n(mid.tight)}\cos(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\cos(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fy)}`);
     eq(math`F_z=F_1\sin\gamma_t+F_2\sin\gamma_{f,c}=${n(mid.tight)}\sin(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\sin(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fz)}`);
@@ -301,15 +295,15 @@ function calculate(c) {
     add('text','Con la tabla se comprueban la demanda por ancho frente al valor de referencia y los diámetros frente al mínimo tabulado de '+n(minDiameterMm)+' mm. El cociente de tracción del modelo llega a '+n(maximumGrip,5)+'; un valor de 1 indica el límite teórico, con el coeficiente tabulado.');
     add('note','Dato faltante para tensión: tensión admisible por ancho de la banda '+name+' a '+n(operatingFpm)+' ft/min (o factor de corrección documentado desde 600 ft/min), en servicio con polea tensora exterior. Para este ancho debe ser al menos '+n(demandImperial,2)+' lbf/in, antes de cualquier margen adicional.');
     add('note','Dato faltante para contraflexión y vida: diámetro mínimo de rodillo exterior para la banda elegida y curva de duración frente a flexiones inversas, o ficha del fabricante que califique la configuración. El rodillo propuesto mide '+n(rollerDiameter)+' mm y cada punto de la banda pasa por él aproximadamente '+n(lapsPerSecond,2)+' veces por segundo en marcha continua. Hace falta definir la vida objetivo de banda y su ciclo de servicio.');
-    const beltReview={demandImperial,allowableIn,operatingFpm,maximumGrip,lapsPerSecond};
+    const beltReview={demandImperial,allowableIn,operatingFpm,maximumGrip,lapsPerSecond,fixedWidth:fixedWidth!=null};
     belt = {selected,speed,length,capacity,...final,fy:mid.fy,fz:mid.fz,rollerDiameter,driver,driven,review:beltReview};
     design = finishDesign(c, power, belt, entries, check, decisionLog);
     add('section','Brazo tensor y resorte de tensión');
     const spring = springDesign(c, belt, add, check, decisionLog);
     add('heading','Conclusión y especificaciones de la propuesta');
-    add('text','Motor nominal de '+c.nominal+' kW para '+n(motorPower/1000)+' kW requeridos. Banda '+name+' de '+n(selected*1000)+' mm, longitud nominal '+n(length)+' m y poleas de '+n(driver*1000)+' y '+n(driven*1000)+' mm.');
-    add('text','Engranes '+c.np+'/'+c.ng+' dientes, '+steels[c.gearSteel].label+', diámetros primitivos de '+n(design.pinion)+' y '+n(design.gear)+' mm, módulo '+n(design.module)+' mm y cara '+n(design.faceMm)+' mm. Flecha '+steels[design.shaftSteelIndex].label+' de '+n(design.diameter)+' mm y rodamientos serie 02 de '+n(design.diameter)+' mm de agujero.');
-    add('text','Resorte '+spring.name+' de '+n(spring.selected)+' mm de alambre y '+n(spring.free)+' mm de longitud libre. Verificación cíclica del resorte pendiente de los datos de resistencia de las tablas.');
+    add('text','Motor propuesto de '+c.nominal+' kW para '+n(motorPower/1000)+' kW requeridos. Banda '+name+', '+(fixedWidth==null?'ancho mínimo calculado de ':'ancho fijo de tabla de ')+n(selected*1000)+' mm, longitud geométrica de '+n(length)+' m y poleas propuestas de '+n(driver*1000)+' y '+n(driven*1000)+' mm.');
+    add('text','Engranes '+c.np+'/'+c.ng+' dientes, '+steels[c.gearSteel].label+', diámetros primitivos de '+n(design.pinion)+' y '+n(design.gear)+' mm, módulo '+n(design.module)+' mm y ancho de cara calculado de '+n(design.faceMm)+' mm. Flecha '+steels[design.shaftSteelIndex].label+' ajustada a los rodamientos seleccionados de la tabla 11-2, serie 02, con agujero de '+n(design.diameter)+' mm.');
+    add('text','Resorte '+spring.name+', diámetro de alambre calculado de '+n(spring.selected)+' mm y longitud libre de '+n(spring.free)+' mm. Quedan por verificar el tamaño disponible y la resistencia cíclica.');
     add('heading','Fuentes');
     add('text','Enunciado Prensa mecánica, pp. 2–3. Libreta de Diseño de Elementos de Máquinas, pp. 9–22, 28–60. Tablas de clase A-20, A-21, 6-2, 6-4, 10-4, 10-5, 11-1, 11-2 y 17-2.');
     add('text','Budynas y Nisbett, Diseño en ingeniería mecánica de Shigley, 10.ª ed., cap. 10, ecuaciones geométricas de esfuerzo en el gancho.');

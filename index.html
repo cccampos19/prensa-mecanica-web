@@ -7,7 +7,7 @@
   <title>Prensa mecánica · Diseño de elementos de máquinas</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
-  <link rel="stylesheet" href="interfaz.css?v=17">
+  <link rel="stylesheet" href="interfaz.css?v=18">
 </head>
 <body>
 <a class="skip" href="#contenido">Ir al contenido</a>
@@ -36,7 +36,7 @@
     <div class="project-intro">
       <div class="intro-copy">
         <h2 id="proposal-title">Propuesta de diseño</h2>
-        <p>Dimensiona la transmisión de la prensa. Elige los materiales de catálogo y las dimensiones iniciales, luego calcula el conjunto en una sola corrida.</p>
+        <p>Dimensiona la transmisión de la prensa. Elige materiales de las tablas, ajusta los datos del problema y calcula el conjunto en una sola corrida.</p>
       </div>
       <div class="project-context">
         <strong>Caso precargado de la tarea</strong>
@@ -59,7 +59,7 @@
         <section class="proposal-group" id="propuesta-2" aria-labelledby="proposal-belt">
           <header class="proposal-heading">
             <h3 id="proposal-belt">Banda y poleas</h3>
-            <p>Selecciona la banda y define la geometría base. La app busca el ancho y el rodillo.</p>
+            <p>Selecciona la banda y define la geometría. La app verifica el rodillo propuesto y calcula el ancho requerido.</p>
           </header>
           <fieldset id="beltFields" aria-labelledby="proposal-belt">
             <label>Material propuesto · tabla 17-2<select name="belt"></select></label>
@@ -148,7 +148,7 @@
       <div class="section-title">
         <h2 id="decision-title">Bitácora de decisiones</h2>
       </div>
-      <p>Medidas evaluadas para la selección de cada componente. Las pestañas de resultados contienen las sustituciones e iteraciones de cálculo.</p>
+      <p>La bitácora identifica las medidas de tabla seleccionadas, las dimensiones calculadas y los datos propuestos que se verificaron.</p>
       <div id="decision-log" class="decision-grid"></div>
     </section>
   </section>
@@ -171,12 +171,12 @@
 </main>
 <script src="catalogos.js?v=12"></script>
 <script src="tensor.js?v=6"></script>
-<script src="motor.js?v=17"></script>
-<script src="transmision.js?v=17"></script>
-<script src="resorte.js?v=17"></script>
+<script src="motor.js?v=18"></script>
+<script src="transmision.js?v=18"></script>
+<script src="resorte.js?v=18"></script>
 <script src="diagramas.js?v=16"></script>
-<script src="memoria-pdf.js?v=17"></script>
-<script src="materiales.js?v=16"></script>
-<script src="app.js?v=17"></script>
+<script src="memoria-pdf.js?v=18"></script>
+<script src="materiales.js?v=18"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>

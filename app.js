@@ -11,7 +11,7 @@ const defaults = {
   rpm: 2100, ratio: 1.875, load: 18000,
   gearEff: 100, beltEff: 100, nominal: 75, pulley: 300, centers: 0.90,
   start: 200, angle: 60, belt: 9,
-  pd:3.175, np:20, ng:80, faceStart:0, faceStep:5, phi:20, yp:.322, yg:.426, ktGear:1.8, gearFat:2, gearStatic:4,
+  pd:3.175, np:20, ng:80, faceStart:0, phi:20, yp:.322, yg:.426, ktGear:1.8, gearFat:2, gearStatic:4,
   gearSteel:17, gearFinish:1, x2:120, x3:320, span:620,
   shaftSteel:33, shaftFinish:1, shaftStart:40, fillet:.1, kc:.59, ktFlex:1.7,
   ktTors:1.4, shaftFat:2, shaftStatic:2, temperature:20, reliability:99,
@@ -31,7 +31,7 @@ const fields = {
   gearFields: [
     ['pd','Paso diametral propuesto (dientes/in)'],
     ['np','Dientes del piñón'], ['ng','Dientes de la rueda'], ['phi','Ángulo de presión (°)'],
-    ['faceStart','Ancho de cara inicial (mm, 0 usa 3 pasos)'], ['faceStep','Incremento de fabricación de cara (mm)'],
+    ['faceStart','Ancho inicial para iterar (mm, 0 usa 3 pasos)'],
     ['gearEff','Eficiencia de engranes (%)'], ['yp','Lewis · piñón'], ['yg','Lewis · rueda'], ['ktGear','Kt en raíz del diente'],
     ['gearFat','Seguridad a fatiga'], ['gearStatic','Seguridad estática']
   ],
@@ -83,7 +83,7 @@ addSelect('gearFields','gearFinish','Acabado',finishes.map(row=>row[0]));
 addSelect('gearFields','gearSteel','Acero propuesto para los engranes',steelLabels);
 addSelect('shaftFields','shaftFinish','Acabado',finishes.map(row=>row[0]));
 addSelect('shaftFields','shaftSteel','Acero propuesto para la flecha',steelLabels);
-addSelect('shaftFields','kc','Factor de carga · tabla de clase',shaftLoadFactors.map(item=>item.label),shaftLoadFactors.map(item=>item.value));
+addSelect('shaftFields','kc','Factor de carga · apuntes, p. 9',shaftLoadFactors.map(item=>item.label),shaftLoadFactors.map(item=>item.value));
 addSelect('bearingFields','bearingType','Tipo · serie 02',['Ranura profunda','Contacto angular']);
 
 addSelect('springFields','wire','Alambre propuesto · tablas 10-4 y 10-5',springWires.map(wire=>wire.name));
@@ -217,12 +217,12 @@ function stageFacts(result,stage,includeSelection){
       ['Velocidad de salida',metric(power.outRpm,'rpm',0)]
     ];
     case 2: return belt&&[
-      ['Ancho calculado',metric(belt.selected*1000,'mm')],
-      ['Diámetro del rodillo',metric(belt.rollerDiameter,'mm',0)],
+      [belt.review.fixedWidth?'Ancho fijo de tabla':'Ancho mínimo calculado',metric(belt.selected*1000,'mm',3)],
+      ['Diámetro propuesto del rodillo',metric(belt.rollerDiameter,'mm')],
       ['Demanda de tensión',metric(belt.review.demandImperial,'lbf/in')]
     ];
     case 3: return design&&[
-      ['Ancho de cara',metric(design.faceMm,'mm')],
+      ['Ancho de cara calculado',metric(design.faceMm,'mm')],
       ['Paso diametral',metric(design.diametral,'dientes/in',4)],
       ['Módulo',metric(design.module,'mm')],
       ['Diámetro primitivo del piñón',metric(design.pinion,'mm')],
@@ -248,7 +248,7 @@ function stageFacts(result,stage,includeSelection){
       ['Vida L10 · apoyo 4',metric(design.bearingLife?.[1],'h',0)]
     ];
     case 7: return spring&&[
-      ['Diámetro de alambre',metric(spring.selected,'mm')],
+      ['Diámetro de alambre calculado',metric(spring.selected,'mm')],
       ['Carga de trabajo',metric(spring.fmin,'',1)+'–'+metric(spring.fmax,'N',1)],
       ['Factor mínimo estático',metric(minimum(spring.elasticFactors),'')]
     ];
@@ -265,12 +265,12 @@ function stageStatus(result,stage){
   if(result.error && stage>failureStage(result)) return 'Pendiente. La corrida se detuvo en '+stages[failureStage(result)-1][0]+'.';
   if(stage===1&&result.power) return 'Cumple la potencia nominal propuesta.';
   if(stage===2&&result.belt) return 'Cumple la geometría y la tensión de referencia del modelo. La tabla 17-2 da el límite a 600 ft/min. Quedan pendientes la capacidad a '+metric(result.belt.review.operatingFpm,'ft/min',0)+' y la contraflexión.';
-  if(stage===3&&result.design) return 'Cumple fatiga y estática con el acero, los factores de Lewis y el entalle propuestos. Los factores de Lewis deben corresponder al perfil de los dientes elegidos.';
+  if(stage===3&&result.design) return 'El ancho calculado cumple fatiga y estática en el modelo. Los factores de Lewis deben corresponder al perfil elegido. Las tablas aportan el acero y sus propiedades.';
   if(stage===5&&result.design?.stockReview) {
     return 'Cumple fatiga y estática en el modelo. La validez para fabricación depende del diámetro y estado de suministro de la barra.';
   }
-  if(stage===6&&result.design?.bearingLife) return 'Cumple el montaje, la carga estática y la vida L10 calculados con la tabla 11-2.';
-  if(stage===7&&result.spring) return 'Cumple estática y longitud en el modelo. La verificación de fatiga del cuerpo y los ganchos requiere su resistencia cíclica.';
+  if(stage===6&&result.design?.bearingLife) return 'La fila de la tabla 11-2 cumple carga estática y vida L10. '+(result.design.bearingMountPending?'Queda por resolver la interferencia del filete en el montaje.':'El radio del filete permite el montaje directo.');
+  if(stage===7&&result.spring) return 'El diámetro calculado cumple estática y longitud en el modelo. La tabla da el intervalo del alambre. La fatiga del cuerpo y los ganchos requiere su resistencia cíclica.';
   return '';
 }
 
@@ -399,12 +399,12 @@ function renderOverview(result) {
   const {power,belt,design,spring}=result;
   const values=[
     power&&['Potencia requerida',number(power.motorPower/1000,2)+' kW',number(power.outRpm)+' rpm a la salida',1],
-    belt&&['Ancho de banda',number(1000*belt.selected)+' mm','Rodillo de '+number(belt.rollerDiameter)+' mm',2],
-    design&&['Engranes',number(design.faceMm)+' mm de cara','Módulo '+number(design.module)+' mm',3],
+    belt&&[belt.review.fixedWidth?'Ancho de banda de tabla':'Ancho mínimo de banda',number(1000*belt.selected)+' mm','Rodillo propuesto de '+number(belt.rollerDiameter)+' mm',2],
+    design&&['Engranes',number(design.faceMm)+' mm de cara calculada','Módulo '+number(design.module)+' mm',3],
     design&&['Equilibrio de la flecha',metric(Math.max(...design.moments),'N·m'),'Momento flector máximo',4],
     design&&['Flecha',number(design.diameter)+' mm',steels[design.shaftSteelIndex]?.label||'Diámetro comercial',5],
     design&&['Rodamientos',number(design.diameter)+' mm de agujero','Vida mínima L10 de '+metric(Math.min(...design.bearingLife),'h',0),6],
-    spring&&['Resorte',number(spring.selected)+' mm de alambre',number(spring.fmin,1)+' a '+number(spring.fmax,1)+' N',7]
+    spring&&['Resorte',number(spring.selected)+' mm de alambre calculado',number(spring.fmin,1)+' a '+number(spring.fmax,1)+' N',7]
   ].filter(Boolean);
   const grid=document.createElement('div');
   grid.className='grid';
@@ -453,10 +453,10 @@ function renderDecisions(result) {
     name.id='decision-group-'+(index+1);
     name.textContent=title;
     header.append(name);
-    const selected=trials.find(trial=>trial.status==='selected');
+    const outcome=trials.find(({status})=>['selected','calculated','verified'].includes(status));
     const selection=document.createElement('p');
     selection.className='decision-selection';
-    selection.textContent=selected?'Selección · '+selected.measure:trials.length?'Sin medida seleccionada':'Sin medidas probadas';
+    selection.textContent=outcome?decisionLabels[outcome.status]+' · '+outcome.measure:trials.length?'Sin medida aprobada':'Sin medidas probadas';
     header.append(selection);
     card.append(header);
     if(summary){
@@ -556,7 +556,7 @@ function formatEquation(value) {
     terms.slice(1).join(' \\\\\n&=') + '\n\\end{aligned}';
 }
 
-const decisionLabels={rejected:'Descartada',viable:'Viable',selected:'Seleccionada'};
+const decisionLabels={rejected:'Descartada',viable:'Viable',selected:'Seleccionada',calculated:'Calculada',verified:'Verificada'};
 
 function reportEntries(result) {
   const log=result.decisions.map(value=>({type:'decision',value}));

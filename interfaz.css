@@ -291,6 +291,8 @@ button:disabled { opacity: .5; cursor: default }
 }
 .trial-status[data-status=selected] { background: #e0edd5; color: #315324; border-color: #c6d8b9 }
 .trial-status[data-status=viable] { background: #efe8fa; color: #583488; border-color: #ddcfee }
+.trial-status[data-status=calculated] { background: #e8edf9; color: #3f527d; border-color: #cdd7ed }
+.trial-status[data-status=verified] { background: #eeeef0; color: #494c5a; border-color: #dedfe5 }
 .trial-status[data-status=rejected] { background: #f7e8e4; color: #82372b; border-color: #ead4cb }
 
 #stage-calculation { margin: 16px 0; border: 1px solid var(--border); border-radius: 9px; background: #eeeaf7 }

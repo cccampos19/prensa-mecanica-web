@@ -17,7 +17,7 @@ function springDesign(c,belt,add,check,{decision,trial}){
   const wireStart=c.wireStart??4;
   check(Number.isFinite(wireStart)&&wireStart>0,'El diámetro inicial del alambre debe ser positivo.');
   const wireDecision=decision(7,'Diámetro del alambre del resorte','mm',
-    wire.name+' con intervalo tabulado de '+n(wire.min)+' a '+n(wire.max)+' mm. Los candidatos avanzan en incrementos de 0.5 mm. La resistencia cíclica está pendiente de verificación.');
+    wire.name+' con intervalo tabulado de '+n(wire.min)+' a '+n(wire.max)+' mm. La tabla 10-4 da un intervalo de aplicación para el cálculo. La selección comercial y la resistencia cíclica quedan pendientes.');
   const first=belt.states[0], last=belt.states.at(-1);
   const fmin=first.springForce, fmax=last.springForce;
   const k=c.springRate, fi=fmin*c.preload/100, mount=first.len*1000;
@@ -57,6 +57,8 @@ function springDesign(c,belt,add,check,{decision,trial}){
     ];
     return {sut,required};
   }
+  const precision=1e-12;
+  const diameterLimit=wire.max*(1+precision);
   let d=Math.min(wire.max,Math.max(wire.min,wireStart)), converged=false;
   text('Diámetro inicial propuesto de '+n(wireStart)+' mm. Intervalo del material de '+n(wire.min)+' a '+n(wire.max)+' mm.');
   if(d!==wireStart) text('La primera iteración usa '+n(d)+' mm, el extremo más cercano del intervalo tabulado.');
@@ -71,13 +73,30 @@ function springDesign(c,belt,add,check,{decision,trial}){
     eq(math`d_{\mathrm{gancho,B}}=\sqrt{\frac{${n(c.springSafety)}(${n(hookShear,5)})(${n(fmax)})}{${n(wire.shear,6)}(${n(sut)})}}=${mm(required[2])}`);
     eq(math`d_{\mathrm{nuevo}}=\max(${[wire.min,...required].map(v=>n(v,5)).join(',')})=${mm(next)}`);
     eq(math`\varepsilon=100\frac{|${n(next,6)}-${n(d,6)}|}{${n(next,6)}}=${n(error,5)}\,\%`);
-    check(next<=wire.max,'El diámetro requerido supera el rango del alambre seleccionado en la tabla 10-4.');
-    d=next;
+    if(next>diameterLimit){
+      text('La siguiente iteración supera el intervalo de aplicación de la fila. Se comprueba la cota requerida con el despeje directo.');
+      break;
+    }
+    d=Math.min(next,wire.max);
     if(error<tolerance){converged=true;break;}
   }
+  head('Diámetro continuo requerido y comprobaciones');
+  text('Con la relación de resistencia de la fila se despeja el diámetro mínimo para cada esfuerzo. El resultado se verifica frente al intervalo tabulado.');
+  eq(math`d_{\min,j}=\left(\frac{nK_jF_{\max}}{\beta_j A}\right)^{1/(2-m)};\quad S_{ut}=A/d^m`);
+  const bounds=[['cuerpo',body,wire.shear],['gancho,A',hookBend,wire.sy],['gancho,B',hookShear,wire.shear]].map(([label,factor,fraction])=>{
+    const required=(c.springSafety*factor*fmax/(fraction*wire.A))**(1/(2-wire.m));
+    eq(math`d_{\mathrm{${label}}}=\left[\frac{(${n(c.springSafety)})(${n(factor,6)})(${n(fmax)})}{(${n(fraction)})(${n(wire.A)})}\right]^{1/(2-${n(wire.m)})}=${mm(required)}`);
+    return required;
+  });
+  const required=Math.max(wire.min,...bounds);
+  eq(math`d_{\min}=\max(${[wire.min,...bounds].map(value=>n(value,6)).join(',')})=${mm(required)}`);
+  if(required>diameterLimit){
+    const reason='El diámetro estático requerido supera el máximo de '+n(wire.max)+' mm del intervalo de la tabla 10-4.';
+    trial(wireDecision,required,'rejected',reason);
+    check(false,reason);
+  }
   check(converged,'El diámetro del resorte no convergió.');
-  head('Propuesta de fabricación y comprobaciones');
-  text('Se prueban diámetros en incrementos de 0.5 mm como propuestas de fabricación dentro del rango tabulado. La disponibilidad de esas medidas depende del proveedor.');
+  const selected=Math.min(required,wire.max);
   function dimensions(d){
     const D=C*d;
     const inches=d/25.4;
@@ -85,39 +104,7 @@ function springDesign(c,belt,add,check,{decision,trial}){
     const active=G*d**4/(8*D**3*k);
     return {D,G,active,envelope:active*d+4*c.hookRadius*d};
   }
-  function tryDiameter(candidate, label){
-    add('iteration',label+' · '+n(candidate)+' mm');
-    if(candidate>wire.max) {
-      const reason='El diámetro supera el límite de '+n(wire.max)+' mm de la tabla 10-4.';
-      text(reason);
-      trial(wireDecision,candidate,'rejected',reason);
-      return false;
-    }
-    const required=Math.max(...sizing(candidate).required);
-    const {envelope}=dimensions(candidate);
-    const viable=candidate>=required&&envelope<=free;
-    eq(math`d=${mm(candidate)};\quad d_{\min,\mathrm{est}}=${mm(required)};\quad L_{\mathrm{est}}=${mm(envelope)};\quad L_0=${mm(free)}`);
-    text(viable?'Cumple la resistencia estática y el espacio disponible.':
-      candidate<required?'El diámetro queda por debajo del mínimo estático calculado para el material.':'La longitud estimada supera el espacio disponible.');
-    const reason='Mínimo estático de '+n(required,3)+' mm. Longitud estimada de '+n(envelope,2)+' mm frente a '+n(free,2)+' mm disponibles. '
-      +(candidate>=required?'Cumple estática.':'No alcanza la resistencia estática.')
-      +(envelope<=free?' Cabe en la longitud libre.':' Excede la longitud libre.');
-    trial(wireDecision,candidate,viable?'viable':'rejected',reason);
-    return viable;
-  }
-  let selected=Math.max(Math.ceil(wire.min*2),Math.floor(d*2))/2;
-  while(selected<=wire.max&&!tryDiameter(selected,'Candidato')) selected+=.5;
-  check(selected<=wire.max,'El alambre elegido no da una propuesta en incrementos de 0.5 mm que cumpla la resistencia estática y el espacio disponible dentro del rango de la tabla 10-4.');
-  const minimumSelected=selected;
-  const minimumTrial=wireDecision.trials.at(-1);
-  const reserve=selected+.5;
-  const useReserve=tryDiameter(reserve,'Candidato de reserva');
-  const selectedTrial=useReserve?wireDecision.trials.at(-1):minimumTrial;
-  if(useReserve) selected=reserve;
-  head('Dimensiones y verificación del alambre elegido');
-  text(useReserve
-    ? 'El mínimo redondeado en estática es '+n(minimumSelected)+' mm. Se adopta el siguiente incremento de 0.5 mm, '+n(selected)+' mm, como reserva provisional.'
-    : 'El incremento adicional de 0.5 mm queda fuera del rango del material, de la resistencia calculada o del espacio disponible. Se conserva '+n(selected)+' mm.');
+  head('Dimensiones y verificación del diámetro calculado');
   const {sut}=sizing(selected);
   const {D,G,active,envelope}=dimensions(selected);
   const initialStress=8*C*fi/(Math.PI*selected**2);
@@ -126,18 +113,20 @@ function springDesign(c,belt,add,check,{decision,trial}){
   eq(math`\tau_i=\frac{8CF_i}{\pi d^2}=\frac{8(${n(C)})(${n(fi)})}{\pi(${n(selected)})^2}=${MPa(initialStress)}`);
   const tau=body*fmax/selected**2, sigmaA=hookBend*fmax/selected**2, tauB=hookShear*fmax/selected**2;
   const elasticFactors=[wire.shear*sut/tau,wire.sy*sut/sigmaA,wire.shear*sut/tauB];
-  check(elasticFactors.every(value=>value>=c.springSafety),'El resorte no alcanza el factor de seguridad estático en el cuerpo y los dos puntos del gancho.');
-  text('Comprobación estática aprobada con las tablas 10-4 y 10-5 para el objetivo de '+n(c.springSafety)+'. El cálculo de longitud libre y el espacio de los ganchos se comprueban con la geometría propuesta.');
+  const staticOK=elasticFactors.every(value=>value>=c.springSafety*(1-precision));
+  const spaceOK=envelope<=free*(1+precision);
   eq(math`\tau_{\max}=K_W\frac{8F_{\max}D}{\pi d^3}=${MPa(tau)};\quad n_{\mathrm{cuerpo}}=${n(wire.shear*sut/tau,4)}`);
   eq(math`\sigma_A=\frac{F_{\max}}{\pi d^2}(16K_A C+4)=${MPa(sigmaA)};\quad n_A=${n(wire.sy*sut/sigmaA,4)}`);
   eq(math`\tau_B=K_B\frac{8F_{\max}D}{\pi d^3}=${MPa(tauB)};\quad n_B=${n(wire.shear*sut/tauB,4)}`);
   eq(math`L_{\mathrm{cuerpo,est}}=N_a d=${mm(active*selected)};\quad L_{0}=${mm(free)}`);
   eq(math`L_{est}=N_a d+4r_g=${mm(envelope)};\quad L_{0}=${mm(free)}`);
-  check(envelope<=free,'La estimación de longitud del cuerpo y los dos ganchos excede la longitud libre.');
-  selectedTrial.status='selected';
-  selectedTrial.reason+=useReserve
-    ?' Se adopta el siguiente incremento como reserva provisional.'
-    :' Se conserva la menor medida compatible porque la reserva se descartó.';
+  const reason='Factor estático mínimo de '+n(Math.min(...elasticFactors),4)+' frente al objetivo de '+n(c.springSafety)+'. Longitud estimada de '+n(envelope,2)+' mm frente a '+n(free,2)+' mm disponibles. '
+    +(staticOK?'Cumple estática. ':'No alcanza la resistencia estática. ')
+    +(spaceOK?'Cabe en la longitud libre.':'Excede la longitud libre.');
+  trial(wireDecision,selected,staticOK&&spaceOK?'calculated':'rejected',reason);
+  check(staticOK,'El diámetro calculado no alcanza el factor de seguridad estático en el cuerpo y los dos puntos del gancho.');
+  check(spaceOK,'Con el diámetro estático calculado, la longitud del cuerpo y los dos ganchos excede la longitud libre.');
+  text('El diámetro calculado cumple la estática y la longitud con la fila elegida. La tabla 10-4 da el intervalo de validez del material. La medida comercial queda pendiente de un catálogo de diámetros disponibles.');
   head('Esfuerzos para la comprobación cíclica');
   const stressRatio=fmin/fmax;
   const fatigueDemand=[];

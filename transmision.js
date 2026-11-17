@@ -75,7 +75,7 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
     return kf;
   }
 
-  function iterate(start, label, step, allowFailure = false) {
+  function iterate(start, label, step, allowFailure = false, precision = tolerance) {
     let current = start;
     for (let k=1;k<=100;k++) {
       add('iteration', 'Iteración ' + k + ' · ' + label);
@@ -89,8 +89,8 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
         check(false,'La iteración produjo un valor inválido.');
       }
       eq(math`\varepsilon=\frac{|${n(next,6)}-${n(current,6)}|}{${n(next,6)}}100=${n(error,5)}\,\%`);
-      text(error < tolerance ? 'Converge con error menor al 3 %.' : 'Se usa el resultado en la siguiente iteración.');
-      if (error<tolerance) return next;
+      text(error < precision ? 'Converge con error menor al '+precision+' %.' : 'Se usa el resultado en la siguiente iteración.');
+      if (error<precision) return next;
       current=next;
     }
     if(allowFailure){
@@ -103,8 +103,7 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
   section('Engranes rectos');
   text('Métodos de la libreta, pp. 28–39. Lewis para flexión del diente y verificación de fatiga pulsante con los factores del ejemplo.');
   check(Number.isFinite(c.pd)&&c.pd>0,'El paso diametral propuesto debe ser positivo.');
-  check(Number.isFinite(c.faceStart)&&c.faceStart>=0&&Number.isFinite(c.faceStep)&&c.faceStep>=0.1,
-    'El ancho inicial debe ser cero o positivo y el incremento de fabricación debe ser de al menos 0.1 mm.');
+  check(Number.isFinite(c.faceStart)&&c.faceStart>=0,'El ancho inicial de cara debe ser cero o positivo.');
   check(c.phi>0&&c.phi<90&&c.yp>0&&c.yg>0&&c.ktGear>=1&&c.gearFat>=1&&c.gearStatic>=1, 'Revisa el ángulo, los factores de Lewis, Kt y las seguridades de engranes.');
   const kd=interpolate(referenceTables[7].rows,c.temperature,'Temperatura');
   const ke=interpolate(referenceTables[6].rows,c.reliability,'Confiabilidad');
@@ -152,6 +151,8 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
     });
   }
   heading('Dimensionamiento iterativo de la cara');
+  const faceDecision=decision(3,'Ancho de cara de los engranes','mm',
+    gear.label+' con paso diametral '+n(diametral,5)+' dientes/in. Intervalo de diseño de '+n(minFace*25.4,2)+' a '+n(maxFace*25.4,2)+' mm según la libreta. Las tablas entregadas no enumeran anchos comerciales.');
   const startFace=Math.min(maxFace,Math.max(minFace,c.faceStart/25.4));
   if(c.faceStart>0&&Math.abs(startFace-c.faceStart/25.4)>1e-9){
     text('El ancho inicial propuesto queda fuera de 3 a 5 pasos circulares. La iteración comienza en el límite más cercano.');
@@ -171,47 +172,28 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
     eq(math`F_{\mathrm{nuevo}}=\max(${[minFace,...requirements].map(v=>n(v,5)).join(',')})=${display(next,'in',5)}`);
     const bounded=Math.min(next,maxFace);
     if(next>maxFace) {
-      text('El ancho requerido en este paso supera 5 pasos circulares. Se evalúa el límite antes de verificar las medidas propuestas.');
+      text('El ancho requerido en este paso supera 5 pasos circulares. Se evalúa directamente el límite geométrico.');
       eq(math`F_{\mathrm{siguiente}}=\min(F_{\mathrm{nuevo}},5p)=\min(${n(next,5)},${n(maxFace,5)})=${display(bounded,'in',5)}`);
     }
     return bounded;
-  });
-  heading('Comprobación de anchos de fabricación');
-  const {faceStep}=c;
-  text('Se prueban múltiplos del incremento propuesto de '+n(faceStep)+' mm dentro de 3 a 5 pasos circulares. El incremento es una decisión de fabricación.');
-  const lastFace=Math.floor((maxFace*25.4+1e-9)/faceStep);
-  const firstFace=Math.ceil((minFace*25.4-1e-9)/faceStep);
-  const faceDecision=decision(3,'Ancho de cara de los engranes','mm',
-    gear.label+' con paso diametral '+n(diametral,5)+' dientes/in. Intervalo de '+n(minFace*25.4,2)+' a '+n(maxFace*25.4,2)+' mm e incremento de fabricación de '+n(faceStep)+' mm.');
-  check(firstFace<=lastFace,'El incremento de '+n(faceStep)+' mm no genera anchos dentro de '+n(minFace*25.4,2)+' a '+n(maxFace*25.4,2)+' mm.');
-  const startCandidate=Math.min(lastFace,Math.ceil((width*25.4-1e-9)/faceStep));
-  let faceMm, gearFatigue, gearStatic;
-  for(let candidate=Math.max(firstFace,startCandidate);candidate<=lastFace;candidate++){
-    const widthMm=candidate*faceStep;
-    add('iteration','Cara candidata · '+n(widthMm)+' mm');
-    eq(math`F=${candidate}(${n(faceStep)})=${mm(widthMm)}`);
-    const checks=faceCheck(widthMm/25.4).map(({label,y,se,sigma})=>{
-      const fatigue=se/(gearKf*sigma), stat=gear.sy/sigma;
-      eq(math`\sigma_{${label}}=\frac{W_tP_d}{FY K_v}=\frac{${n(wt/lbf)}\cdot ${n(diametral,5)}}{${n(widthMm/25.4,5)}\cdot ${n(y)}\cdot ${n(kv,5)}}\,\mathrm{psi}=${stress(sigma)}`);
-      eq(math`n_{fat,${label}}=\frac{${n(se)}}{${n(gearKf,5)}\cdot ${n(sigma)}}=${n(fatigue,4)};\quad n_{est,${label}}=\frac{${n(gear.sy)}}{${n(sigma)}}=${n(stat,4)}`);
-      return {fatigue,stat};
-    });
-    const fatigueOk=checks.every(value=>value.fatigue>=c.gearFat);
-    const staticOk=checks.every(value=>value.stat>=c.gearStatic);
-    text('Fatiga '+(fatigueOk?'cumple':'insuficiente')+' para el objetivo '+n(c.gearFat)+'. Estática '+(staticOk?'cumple':'insuficiente')+' para el objetivo '+n(c.gearStatic)+'.');
-    const minFatigue=Math.min(...checks.map(value=>value.fatigue));
-    const minStatic=Math.min(...checks.map(value=>value.stat));
-    trial(faceDecision,widthMm,fatigueOk&&staticOk?'selected':'rejected',
-      'Factor mínimo de fatiga '+n(minFatigue,4)+' frente a '+n(c.gearFat)+' requerido. Factor estático mínimo '+n(minStatic,4)+' frente a '+n(c.gearStatic)+' requerido. '
-      +(fatigueOk&&staticOk?'Cumple ambos en el piñón y la rueda.':'Falla '+(!fatigueOk&&!staticOk?'fatiga y estática.':fatigueOk?'estática.':'fatiga.')));
-    if(fatigueOk&&staticOk){
-      faceMm=widthMm;
-      gearFatigue=checks.map(value=>value.fatigue);
-      gearStatic=checks.map(value=>value.stat);
-      break;
-    }
+  },false,0.000001);
+  heading('Comprobación del ancho calculado');
+  const faceMm=width*25.4;
+  eq(math`F=${mm(faceMm)}`);
+  const gearFatigue=[], gearStatic=[];
+  for(const {label,y,se,sigma} of faceCheck(width)){
+    const fatigue=se/(gearKf*sigma), stat=gear.sy/sigma;
+    eq(math`\sigma_{${label}}=\frac{W_tP_d}{FY K_v}=\frac{${n(wt/lbf)}\cdot ${n(diametral,5)}}{${n(width,5)}\cdot ${n(y)}\cdot ${n(kv,5)}}\,\mathrm{psi}=${stress(sigma)}`);
+    eq(math`n_{fat,${label}}=\frac{${n(se)}}{${n(gearKf,5)}\cdot ${n(sigma)}}=${n(fatigue,4)};\quad n_{est,${label}}=\frac{${n(gear.sy)}}{${n(sigma)}}=${n(stat,4)}`);
+    gearFatigue.push(fatigue);
+    gearStatic.push(stat);
   }
-  check(faceMm,gear.label+' con paso diametral '+n(diametral,5)+' no alcanza las seguridades con los anchos evaluados hasta '+n(lastFace*faceStep,2)+' mm. El límite de 5 pasos circulares es '+n(maxFace*25.4,2)+' mm.');
+  const minFatigue=Math.min(...gearFatigue), minStatic=Math.min(...gearStatic);
+  const fatigueOk=minFatigue>=c.gearFat*(1-1e-8), staticOk=minStatic>=c.gearStatic*(1-1e-8);
+  const reason='Factor mínimo de fatiga '+n(minFatigue,4)+' frente a '+n(c.gearFat)+' requerido. Factor estático mínimo '+n(minStatic,4)+' frente a '+n(c.gearStatic)+' requerido. ';
+  trial(faceDecision,faceMm,fatigueOk&&staticOk?'calculated':'rejected',
+    reason+(fatigueOk&&staticOk?'El ancho calculado cumple en el piñón y la rueda.':'El ancho evaluado queda por debajo de uno o ambos requisitos.'));
+  check(fatigueOk&&staticOk,gear.label+' con paso diametral '+n(diametral,5)+' no alcanza las seguridades con el ancho evaluado de '+n(faceMm,2)+' mm. El límite de 5 pasos circulares es '+n(maxFace*25.4,2)+' mm.');
 
   section('Equilibrio de la flecha');
   text('Apoyos 1 y 4, piñón en 2 y polea en 3. Se conserva el convenio del proyecto para las componentes del piñón y la banda. Apuntes, p. 14.');
@@ -310,19 +292,19 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
     const [C10,C0]=row.slice(column,column+2);
     const passes=requirements.map(([dynamic,staticLoad])=>[C10>=dynamic,C0>=staticLoad]);
     const shoulders=1.2*d>=shoulder&&1.5*d>=shoulder;
-    const spacer=c.fillet*d<=rmax||rmax>=1;
-    return {row,passes,shoulders,spacer,fit:shoulders&&spacer&&passes.every(pair=>pair.every(Boolean))};
+    const directMount=c.fillet*d<=rmax;
+    return {row,passes,shoulders,directMount,fit:shoulders&&passes.every(pair=>pair.every(Boolean))};
   });
 
   heading('Dimensionamiento con el acero propuesto');
-  text('Todos los candidatos usan '+shaft.label+' y las propiedades de su fila. El diámetro inicial es el punto de partida del cálculo continuo. Para la medida final se prueban agujeros de la tabla 11-2 en orden creciente y se verifican fatiga, estática, vida y montaje.');
+  text('Todos los candidatos usan '+shaft.label+' y las propiedades de su fila. El diámetro inicial es el punto de partida del cálculo continuo. Se prueban agujeros de la tabla 11-2 en orden creciente y se verifican fatiga, estática, vida, hombros e interferencia del filete.');
   eq(math`d_{\mathrm{inicial}}=${mm(c.shaftStart)};\quad S'_e=0.5(${n(shaft.sut)})=${stress(.5*shaft.sut)};\quad k_c=${n(c.kc)};\quad k_d=${n(kd)};\quad k_e=${n(ke)}`);
   eq(math`n_{f,\min}=${n(c.shaftFat)};\quad n_{est,\min}=${n(c.shaftStatic)}`);
   const continuous=solveDiameter(shaft);
   heading('Verificación por diámetro de catálogo');
   text('La medida final se decide con las comprobaciones directas de cada diámetro. El resultado continuo sirve como referencia de dimensionamiento.');
   const shaftDecision=decision(5,'Diámetro base de la flecha','mm',
-    shaft.label+'. Se prueban agujeros compatibles con la vida, la carga y el montaje de los rodamientos.'
+    shaft.label+'. Se prueban agujeros compatibles con la vida, la carga y los hombros de los rodamientos.'
     +(continuous===null?'':' El cálculo continuo dio '+n(continuous,2)+' mm.'));
   const shaftTrials=[];
   let chosen;
@@ -352,7 +334,7 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
   text('Apuntes, pp. 56–60, tablas 11-1 y 11-2. Engranes rectos y banda plana sin empuje axial externo: V = 1, X = 1, Y = 0. La vida L10 corresponde al 90 % de confiabilidad de rodamiento.');
   text(bearingType+' · serie 02. Ambos apoyos usan el mismo diámetro base.');
   const bearingDecision=decision(6,'Agujero de los rodamientos','mm',
-    bearingType+' de la serie 02, tabla 11-2. Se busca un agujero común que cubra '+n(c.life)+' h de vida L10, estática y montaje en ambos apoyos.');
+    bearingType+' de la serie 02, tabla 11-2. Se busca un agujero común que cubra '+n(c.life)+' h de vida L10, estática y hombros en ambos apoyos. El radio de montaje directo se comprueba para cada medida.');
   eq(math`L_{10}=\frac{60(${n(power.shaftRpm)})(${n(c.life)})}{10^6}=${n(life)}\quad\text{millones de revoluciones}`);
   requirements.forEach(([dynamic,staticLoad],i)=>{
     const load=loads[i], side=i===0?1:4;
@@ -362,7 +344,7 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
   });
 
   for(const option of bearingOptions){
-    const {row,passes,shoulders,spacer}=option;
+    const {row,passes,shoulders,directMount}=option;
     const [d]=row;
     const [C10,C0]=row.slice(column,column+2);
     add('iteration','Candidato · '+d+' mm');
@@ -374,23 +356,23 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
       if(!dynamicPass) failures.push('Capacidad dinámica insuficiente'+support+'.');
       if(!staticPass) failures.push('Capacidad estática insuficiente'+support+'.');
     });
-    text('Hombros '+(shoulders?'compatibles':'insuficientes')+'. Espaciador '+(spacer?'compatible':'incompatible')+'.');
+    const mount=directMount?'El radio del filete permite montaje directo.':'El radio del filete requiere resolver la interferencia de montaje.';
+    text('Hombros '+(shoulders?'compatibles':'insuficientes')+'. '+mount);
     if(!shoulders) failures.push('Hombros insuficientes.');
-    if(!spacer) failures.push('Espaciador incompatible.');
     if(row===chosen){
-      trial(bearingDecision,d,'selected','Cumple vida, estática y montaje en ambos apoyos. Coincide con el diámetro aprobado de la flecha.');
+      trial(bearingDecision,d,'selected','Cumple vida, estática y hombros. Coincide con el diámetro aprobado de la flecha. '+mount);
       text('Diámetro seleccionado en conjunto con '+shaft.label+'.');
       break;
     }
     if(option.fit){
-      const reason='Cumple vida, estática y montaje de rodamientos. Se descarta en la comprobación de la flecha con '+shaft.label+'.';
+      const reason='Cumple vida, estática y hombros. Se descarta en la comprobación de la flecha con '+shaft.label+'. '+mount;
       text('Se descartó este diámetro en la comprobación de la flecha con '+shaft.label+'.');
       trial(bearingDecision,d,'viable',reason);
     } else {
       trial(bearingDecision,d,'rejected',failures.join(' '));
     }
   }
-  check(shaftTrials.length,'La tabla 11-2 no ofrece agujeros compatibles con la vida, las cargas y el montaje de la serie propuesta.',6);
+  check(shaftTrials.length,'La tabla 11-2 no ofrece agujeros compatibles con la vida, las cargas y los hombros de la serie propuesta.',6);
   check(chosen,'Con '+shaft.label+', ningún diámetro compatible de la tabla 11-2 alcanza las seguridades de la flecha.',5);
   heading('Selección y verificación comercial');
   const [diameter,outer,bearingWidth,rmax,shoulder,housing]=chosen;
@@ -437,10 +419,11 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
   });
   const shaftVerification=entries.splice(shaftVerificationStart);
   entries.splice(bearingStageStart,0,...shaftVerification);
-  if(c.fillet*diameter>rmax){
-    const fillet=c.fillet*diameter, chamfer=fillet+1, spacer=Math.max(10,chamfer+3);
+  const fillet=c.fillet*diameter;
+  const bearingMountPending=fillet>rmax;
+  if(bearingMountPending){
     eq(math`r_{filete}=${mm(fillet)}>r_{\max}=${mm(rmax)}`);
-    note('Interferencia de filete. Propuesta de montaje: espaciador de '+n(spacer)+' mm, chaflán interior de al menos '+n(chamfer)+' mm y radio de borde de 1 mm. Verificar el detalle en el plano.');
+    note('El montaje directo presenta interferencia. Queda por definir en el plano la interfaz que libre el filete de '+n(fillet)+' mm y apoye en el rodamiento con el radio límite de '+n(rmax)+' mm de la tabla 11-2.');
   }
-  return {module,diametral,pinion,gear:gearDiameter,faceMm,wt,wr,loads,moments,continuous,diameter,planes,kd,ke,gearFatigue,gearStatic,shaftFatigue,shaftStatic,bearingLife,stockReview,shaftSteelIndex,shaftTrials};
+  return {module,diametral,pinion,gear:gearDiameter,faceMm,wt,wr,loads,moments,continuous,diameter,planes,kd,ke,gearFatigue,gearStatic,shaftFatigue,shaftStatic,bearingLife,bearingMountPending,stockReview,shaftSteelIndex,shaftTrials};
 }
