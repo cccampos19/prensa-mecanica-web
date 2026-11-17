@@ -134,10 +134,10 @@ function calculate(c) {
     eq(math`t=${mm(thickness)};\quad \mu=${n(friction)};\quad d_{min}=${mm(minimumIn*inch)}`);
     eq(math`S_{perm}=${display(allowableIn,'lbf/in')}(4.448221615/0.0254)=${display(allowable,'N/m')}`);
     eq(math`\rho=\frac{\gamma}{g}=\frac{${n(weightIn,5)}(4.448221615)}{(0.0254)^3(9.80665)}=${dual(density,'kg/m^3',inch**3/.45359237,'lb/in^3')}`);
-    add('note', 'La tabla 17-2 da la tensión permisible a 600 ft/min. Se conserva la aplicación del ejemplo de clase a otra velocidad. Falta comprobar este criterio a la velocidad real.');
+    add('note', 'La tensión permisible de la tabla 17-2 corresponde a 600 ft/min. Se emplea como referencia para iterar el ancho; el resultado es preliminar si la velocidad difiere o hay flexión inversa.');
     if (name.startsWith('Cuero')) add('note', 'Se utiliza el extremo superior de 0.045 lbf/in³ del intervalo de la tabla 17-2 para el cuero.');
     add('heading', 'Geometría y velocidad de la banda');
-    add('note','Se comprueba el diámetro del rodillo con el mínimo de tabla 17-2 como referencia. La autorización de flexión inversa y la tensión admisible a la velocidad real requieren datos del fabricante.');
+    add('note','El mínimo de la tabla 17-2 sirve de comparación geométrica. Para el rodillo de contraflexión hace falta el diámetro mínimo específico en flexión inversa.');
     add('text', 'Banda abierta, relación de tensiones con fuerza centrífuga y balance de potencia (apuntes, pp. 40–47).');
     eq(math`d=D/i_b=${n(driven)}/${n(c.ratio)}=${mm(driver)}`);
     eq(math`d_{menor}=${mm(small)}${small >= minimumIn*inch ? '\\ge ' : '<'}d_{min}=${mm(minimumIn*inch)}`);
@@ -189,10 +189,10 @@ function calculate(c) {
     check(error < tolerance, 'El ancho no convergió después de 100 iteraciones.');
     const selected = Math.ceil(width / .01) * .01;
     eq(math`b_{elegido}=10\left\lceil\frac{${n(width*1000,6)}}{10}\right\rceil=${mm(selected)}`);
-    if (name.startsWith('Cuero') && selected >= 8 * inch) {
+    if (name.startsWith('Cuero') && [6,9].includes(minimumIn) && selected >= 8 * inch) {
       const corrected = (minimumIn + 2) * inch;
       eq(math`d_{min,corr}=d_{min}+2\,\mathrm{in}=${mm(corrected)}`);
-      check(small >= corrected, 'La banda de cuero de 8 in o más requiere aumentar el diámetro mínimo en 2 in.');
+      check(Math.min(small,rollerDiameter/1000) >= corrected, 'La nota a de la tabla 17-2 exige aumentar 2 in el diámetro mínimo de esta banda de cuero ancha.');
     }
     const final = tension(selected);
     showTensions(selected, final);
@@ -201,7 +201,7 @@ function calculate(c) {
     const capacity = allowable * selected;
     eq(math`F_{perm}=S_{perm}b=(${n(allowable)})(${n(selected)})=${force(capacity)}`);
     eq(math`F_1=${force(final.tight)}${final.tight <= capacity ? '\\le ' : '>'}F_{perm}=${force(capacity)}`);
-    check(final.tight <= capacity + 1e-9, 'El ancho redondeado no satisface la tensión permisible. Revisa la propuesta.');
+    check(final.tight <= capacity + 1e-9, 'El ancho redondeado supera la tensión de referencia de la tabla 17-2.');
     add('heading','Carga sobre la polea conducida con el tensor');
     add('text','En la polea conducida actúan las dos tensiones en sus direcciones tangentes locales. La reacción de la polea auxiliar va a su pivote.');
     const mid=final.states[50];
@@ -211,7 +211,18 @@ function calculate(c) {
     eq(math`F_y=F_1\cos\gamma_t+F_2\cos\gamma_{f,c}=${n(mid.tight)}\cos(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\cos(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fy)}`);
     eq(math`F_z=F_1\sin\gamma_t+F_2\sin\gamma_{f,c}=${n(mid.tight)}\sin(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\sin(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fz)}`);
     eq(math`|\mathbf F|=\sqrt{(${n(mid.fy)})^2+(${n(mid.fz)})^2}=${force(Math.hypot(mid.fy,mid.fz))}`);
-    belt = {selected,speed,length,capacity,...final,fy:mid.fy,fz:mid.fz,rollerDiameter,driver,driven};
+    add('heading','Alcance de la verificación de banda');
+    const operatingFpm=speed*60/(12*inch), demand=final.tight/selected;
+    const demandImperial=demand*inch/lbf, minDiameterMm=1000*minimumIn*inch;
+    const lapsPerSecond=speed/length;
+    eq(math`S_{\mathrm{req}}=\frac{F_{1,\max}}{b}=\frac{${n(final.tight)}}{${n(selected*1000)}}=${dual(demand/1000,"N/mm",1000*inch/lbf,"lbf/in")}`);
+    eq(math`\frac{S_{\mathrm{req}}}{S_{17-2}}=\frac{${n(demandImperial)}}{${n(allowableIn)}}=${n(demandImperial/allowableIn,5)}`);
+    eq(math`f_{\mathrm{vuelta}}=\frac{v}{L}=\frac{${n(speed)}}{${n(length)}}=${display(lapsPerSecond,"Hz")}`);
+    add('text','Con la tabla se comprueban la demanda por ancho frente al valor de referencia y los diámetros frente al mínimo tabulado de '+n(minDiameterMm)+' mm. El cociente de tracción del modelo llega a '+n(maximumGrip,5)+'; un valor de 1 indica el límite teórico, con el coeficiente tabulado.');
+    add('note','Dato faltante para tensión: tensión admisible por ancho de la banda '+name+' a '+n(operatingFpm)+' ft/min (o factor de corrección documentado desde 600 ft/min), en servicio con polea tensora exterior. Para este ancho debe ser al menos '+n(demandImperial,2)+' lbf/in, antes de cualquier margen adicional.');
+    add('note','Dato faltante para contraflexión y vida: diámetro mínimo de rodillo exterior para la banda elegida y curva de duración frente a flexiones inversas, o ficha del fabricante que califique la configuración. El rodillo propuesto mide '+n(rollerDiameter)+' mm y cada punto de la banda pasa por él aproximadamente '+n(lapsPerSecond,2)+' veces por segundo en marcha continua. Hace falta definir la vida objetivo de banda y su ciclo de servicio.');
+    const beltReview={demandImperial,allowableIn,operatingFpm,maximumGrip,lapsPerSecond};
+    belt = {selected,speed,length,capacity,...final,fy:mid.fy,fz:mid.fz,rollerDiameter,driver,driven,review:beltReview};
     const design = finishDesign(c, power, belt, add, check);
     add('section','Brazo tensor y resorte de tensión');
     const spring = springDesign(c, belt, add, check);

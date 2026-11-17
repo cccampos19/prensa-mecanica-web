@@ -194,7 +194,7 @@ function renderOverview(result) {
   }
   const note=document.createElement('p');
   note.className='note';
-  note.textContent='Por verificar: fatiga del resorte y condiciones de trabajo de la banda.';
+  note.textContent='Banda: '+number(belt.review.demandImperial,2)+' lbf/in a '+number(belt.review.operatingFpm,0)+' ft/min. La tabla solo da el límite de referencia a 600 ft/min. Resorte: estática comprobada, con factor mínimo '+number(Math.min(...spring.elasticFactors),2)+'. Faltan la resistencia cíclica y los ciclos objetivo.';
   const diagrams=document.createElement('a');
   diagrams.href='#etapa-8';
   diagrams.className='button secondary';

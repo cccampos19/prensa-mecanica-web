@@ -85,6 +85,9 @@ function springDesign(c,belt,add,check){
   eq(math`G=${display(G/1000,'GPa')};\quad N_a=\frac{Gd^4}{8D^3k}=\frac{${n(G)}(${n(selected)})^4}{8(${n(D)})^3(${n(k,5)})}=${n(active,4)}`);
   eq(math`\tau_i=\frac{8CF_i}{\pi d^2}=\frac{8(${n(C)})(${n(fi)})}{\pi(${n(selected)})^2}=${MPa(initialStress)}`);
   const tau=body*fmax/selected**2, sigmaA=hookBend*fmax/selected**2, tauB=hookShear*fmax/selected**2;
+  const elasticFactors=[wire.shear*sut/tau,wire.sy*sut/sigmaA,wire.shear*sut/tauB];
+  check(elasticFactors.every(value=>value>=c.springSafety),'El resorte no alcanza el factor de seguridad estático en el cuerpo y los dos puntos del gancho.');
+  text('Comprobación estática aprobada con las tablas 10-4 y 10-5 para el objetivo de '+n(c.springSafety)+'. El cálculo de longitud libre y el espacio de los ganchos se comprueban con la geometría propuesta.');
   eq(math`\tau_{\max}=K_W\frac{8F_{\max}D}{\pi d^3}=${MPa(tau)};\quad n_{\mathrm{cuerpo}}=${n(wire.shear*sut/tau,4)}`);
   eq(math`\sigma_A=\frac{F_{\max}}{\pi d^2}(16K_A C+4)=${MPa(sigmaA)};\quad n_A=${n(wire.sy*sut/sigmaA,4)}`);
   eq(math`\tau_B=K_B\frac{8F_{\max}D}{\pi d^3}=${MPa(tauB)};\quad n_B=${n(wire.shear*sut/tauB,4)}`);
@@ -93,11 +96,18 @@ function springDesign(c,belt,add,check){
   eq(math`L_{est}=N_a d+4r_g=${mm(envelope)};\quad L_{0}=${mm(free)}`);
   check(envelope<=free,'La estimación de longitud del cuerpo y los dos ganchos excede la longitud libre.');
   head('Esfuerzos para la comprobación cíclica');
-  for (const [label,factor] of [['Cuerpo',body],['Gancho A · flexión',hookBend],['Gancho B · torsión',hookShear]]) {
+  const stressRatio=fmin/fmax;
+  const fatigueDemand=[];
+  eq(math`R=F_{\min}/F_{\max}=${n(fmin)}/${n(fmax)}=${n(stressRatio,5)}`);
+  for (const [label,factor] of [['Cuerpo · torsión',body],['Gancho A · flexión',hookBend],['Gancho B · torsión',hookShear]]) {
+    const cyclic={label,min:factor*fmin/selected**2,max:factor*fmax/selected**2};
+    fatigueDemand.push(cyclic);
+    eq(math`s_{\min}=${MPa(cyclic.min)};\quad s_{\max}=${MPa(cyclic.max)}`);
     text(label);
     eq(math`s_a=\frac{K_F F_a}{d^2}=\frac{(${n(factor,6)})(${n(fa)})}{${n(selected)}^2}=${MPa(factor*fa/selected**2)}`);
     eq(math`s_m=\frac{K_F F_m}{d^2}=\frac{(${n(factor,6)})(${n(fm)})}{${n(selected)}^2}=${MPa(factor*fm/selected**2)}`);
   }
-  note('Faltan propiedades de fatiga para cerrar esta verificación con las tablas entregadas. Cambiar el diámetro modifica los esfuerzos, pero no aporta la resistencia cíclica faltante.');
-  return {name:wire.name,fmin,fmax,k,fi,selected,D,active,free};
+  note('Datos faltantes: curva esfuerzo–vida o esfuerzo alternante admisible del alambre '+wire.name+' a '+n(selected)+' mm, para torsión del cuerpo, flexión de A y torsión de B, al cociente de carga R = '+n(stressRatio,3)+' y para los radios, acabado y tratamiento de los extremos propuestos. Una curva fabricante de carga–vida del resorte terminado para este intervalo de carga también permite verificar el conjunto.');
+  note('Falta fijar los ciclos objetivo del tensor y su historial de carga. Las horas L10 de rodamientos y las rpm de la flecha no determinan cuántas veces se recorre el intervalo de carga del resorte. Los límites elásticos de la tabla 10-5 y los valores estáticos del recorte 10-6 no son datos de vida a fatiga.');
+  return {name:wire.name,fmin,fmax,k,fi,selected,D,active,free,elasticFactors,stressRatio,fatigueDemand};
 }
