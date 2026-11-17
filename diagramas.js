@@ -54,7 +54,8 @@ function designDiagrams(c,p,b,d,s){
   label(328,16,'Ancho '+num(b.selected*1000)+' mm');
 
   panel('Engranes rectos','Círculos primitivos y componentes de la fuerza sobre el piñón. El perfil de diente es esquemático.');
-  const rA=10+28*c.pinion/Math.max(c.pinion,c.gear),rB=10+28*c.gear/Math.max(c.pinion,c.gear);
+  const largerGear=Math.max(d.pinion,d.gear);
+  const rA=10+28*d.pinion/largerGear,rB=10+28*d.gear/largerGear;
   circle(159-rA,60,rA);circle(159+rB,60,rB);
   arrow(159,60,159,104);arrow(159,60,113,60);
   label(150,115,'Wt');label(93,63,'Wr');
@@ -86,7 +87,7 @@ function designDiagrams(c,p,b,d,s){
   label(63,24,'Base '+d.diameter+' mm');
   label(200,24,'Sección 3 '+num(1.2*d.diameter)+' mm');
   label(347,24,'Hombro '+num(1.5*d.diameter)+' mm');
-  label(202,107,'Diámetro continuo: '+num(d.continuous)+' mm');
+  if(d.continuous!==null) label(202,107,'Diámetro continuo: '+num(d.continuous)+' mm');
 
   panel('Rodamientos y reacciones máximas','Las reacciones mostradas son máximos del recorrido y pueden corresponder a posiciones diferentes.');
   circle(92,63,33);circle(92,63,19);circle(327,63,33);circle(327,63,19);

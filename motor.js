@@ -24,7 +24,9 @@ function calculate(c) {
   const entries = [];
   const add = (type, value) => entries.push({type, value});
   const eq = value => add('eq', value);
-  const check = (condition, message) => { if (!condition) throw new Error(message); };
+  const check = (condition, message, stage) => {
+    if (!condition) throw Object.assign(new Error(message), {stage});
+  };
   const n = number;
   const kw = watts => dual(watts / 1000, 'kW', 1000 / hp, 'hp');
   const torque = value => dual(value, 'N\\,m', 1 / (lbf * inch * 12), 'lbf\\,ft');
@@ -33,30 +35,30 @@ function calculate(c) {
   const iterations = [];
   let power;
   let belt;
+  let design;
 
   try {
-    for (const [value, label] of [
-      [c.rpm,'rpm del motor'], [c.ratio,'relación de banda'], [c.load,'torque de salida'],
-      [c.pinion,'diámetro del piñón'], [c.gear,'diámetro del engrane'],
-      [c.gearEff,'eficiencia de engranes'], [c.beltEff,'eficiencia de banda'],
-      [c.nominal,'potencia nominal']
-    ]) check(Number.isFinite(value) && value > 0, 'Ingresa un valor positivo para ' + label + '.');
-    check(c.gearEff <= 100 && c.beltEff <= 100, 'Las eficiencias deben ser como máximo 100 %.');
-
     add('section', 'Potencia y velocidades');
+    for (const [value, label, stage] of [
+      [c.rpm,'rpm del motor',1], [c.load,'torque de salida',1], [c.nominal,'potencia nominal',1],
+      [c.ratio,'relación de banda',2], [c.beltEff,'eficiencia de banda',2], [c.gearEff,'eficiencia de engranes',3]
+    ]) check(Number.isFinite(value) && value > 0, 'Ingresa un valor positivo para ' + label + '.', stage);
+    check(c.beltEff<=100,'La eficiencia de la banda debe ser como máximo 100 %.',2);
+    check(c.gearEff<=100,'La eficiencia de los engranes debe ser como máximo 100 %.',3);
+
+    check([c.np,c.ng].every(value=>Number.isSafeInteger(value)&&value>0), 'Propón números enteros positivos de dientes para el piñón y la rueda.', 3);
     add('heading', 'Datos del enunciado y del plano');
     eq(math`n_m=${display(c.rpm,'rpm')};\quad i_b=${n(c.ratio)};\quad T_s=${display(c.load,'kgf\\,cm')}`);
-    eq(math`d_p=${mm(c.pinion/1000)};\quad d_g=${mm(c.gear/1000)}`);
     add('heading', 'Hipótesis de pérdidas y propuesta de motor');
     add('text', 'El enunciado escrito especifica un torque de salida. Para el caso de la tarea se supone una transmisión sin pérdidas porque el texto no da eficiencias ni pérdidas. Si editas una eficiencia, se aplica el valor indicado a esa etapa.');
     eq(math`\eta_b=${n(c.beltEff/100)};\quad\eta_g=${n(c.gearEff/100)};\quad P_{nom}=${kw(c.nominal*1000)}`);
     add('text', 'Método de clase: relaciones de transmisión y potencia mecánica (apuntes, pp. 28, 30 y 41–42).');
     add('heading', 'Cadena de velocidades');
     const shaftRpm = c.rpm / c.ratio;
-    const gearRatio = c.gear / c.pinion;
+    const gearRatio = c.ng / c.np;
     const outRpm = shaftRpm / gearRatio;
     eq(math`n_e=\frac{n_m}{i_b}=\frac{${n(c.rpm)}}{${n(c.ratio)}}=${display(shaftRpm,'rpm')}`);
-    eq(math`i_g=\frac{d_g}{d_p}=\frac{${n(c.gear)}}{${n(c.pinion)}}=${n(gearRatio)}`);
+    eq(math`i_g=\frac{N_g}{N_p}=\frac{${c.ng}}{${c.np}}=${n(gearRatio)}`);
     eq(math`n_s=\frac{n_e}{i_g}=\frac{${n(shaftRpm)}}{${n(gearRatio)}}=${display(outRpm,'rpm')}`);
     add('heading', 'Torques y potencias');
     const outTorque = c.load * gravity / 100;
@@ -74,11 +76,11 @@ function calculate(c) {
     add('heading', 'Comprobación del motor nominal');
     const motorFits = c.nominal * 1000 >= motorPower;
     eq(math`P_{nom}=${kw(c.nominal*1000)}${motorFits ? '\\ge ' : '<'}P_m=${kw(motorPower)}`);
-    check(motorFits, 'La potencia nominal propuesta es insuficiente.');
-    power = {shaftRpm,outRpm,motorPower,shaftTorque,outPower,outTorque,motorTorque};
+    power = {shaftRpm,outRpm,motorPower,shaftTorque,outPower,outTorque,motorTorque,motorFits};
+    check(motorFits, 'El motor propuesto entrega '+n(c.nominal)+' kW nominales y el cálculo requiere al menos '+n(motorPower/1000)+' kW.');
 
     add('section', 'Poleas y banda plana');
-    for (const [value, label] of [[c.pulley,'diámetro conducido'], [c.centers,'distancia entre centros'], [c.start,'ancho inicial']]) {
+    for (const [value, label] of [[c.pulley,'diámetro conducido'], [c.centers,'distancia entre centros'], [c.start,'ancho inicial'], [c.idlerRadius,'radio inicial del rodillo']]) {
       check(Number.isFinite(value) && value > 0, 'Ingresa un valor positivo para ' + label + '.');
     }
     check(Number.isFinite(c.angle), 'Ingresa la orientación de la carga.');
@@ -95,31 +97,53 @@ function calculate(c) {
     check(2 * c.centers > driven + driver, 'La distancia entre centros debe superar la suma de los radios.');
     const small = Math.min(driver, driven);
     const tightAngle=c.angle*Math.PI/180+Math.asin((driven-driver)/(2*c.centers));
-    check(c.springRate>0,'La rigidez propuesta del resorte debe ser positiva.');
+    check(Number.isFinite(c.springRate)&&c.springRate>0,'La rigidez propuesta del resorte debe ser positiva.');
+    add('heading', 'Propuesta y datos de catálogo');
+    add('text', name + ' · tabla 17-2. Se conservan el material, la relación de transmisión, la polea conducida y la distancia entre centros. Se iteran el rodillo y el ancho de banda.');
+    eq(math`D=${mm(driven)};\quad C=${mm(c.centers)};\quad \beta=${n(c.angle)}^\circ`);
+    eq(math`t=${mm(thickness)};\quad \mu=${n(friction)};\quad d_{min}=${mm(minimumIn*inch)}`);
+    eq(math`S_{perm}=${display(allowableIn,'lbf/in')}(4.448221615/0.0254)=${display(allowable,'N/m')}`);
+    eq(math`\rho=\frac{\gamma}{g}=\frac{${n(weightIn,5)}(4.448221615)}{(0.0254)^3(9.80665)}=${dual(density,'kg/m^3',inch**3/.45359237,'lb/in^3')}`);
+    add('note', 'La tensión permisible de la tabla 17-2 corresponde a 600 ft/min. Se emplea como referencia para iterar el ancho. El resultado es preliminar si la velocidad difiere o hay flexión inversa.');
+    if (name.startsWith('Cuero')) add('note', 'Se utiliza el extremo superior de 0.045 lbf/in³ del intervalo de la tabla 17-2 para el cuero.');
+    eq(math`d=D/i_b=${n(driven)}/${n(c.ratio)}=${mm(driver)}`);
+    eq(math`d_{menor}=${mm(small)}${small >= minimumIn*inch ? '\\ge ' : '<'}d_{min}=${mm(minimumIn*inch)}`);
+    if(small<minimumIn*inch){
+      const minimumDriven=minimumIn*inch*Math.max(1,c.ratio);
+      check(false,'La polea menor queda por debajo del mínimo de la tabla 17-2 para '+name+'. A esta relación se requiere una polea conducida de al menos '+n(minimumDriven*1000)+' mm, antes de verificar el espacio del tensor.');
+    }
     add('heading','Selección del diámetro del rodillo');
     const minRoller=1000*minimumIn*inch;
+    const maxRoller=300-driver*1000;
     const proposed=2*c.idlerRadius;
+    add('text','Diámetro inicial del rodillo de '+n(proposed)+' mm. Las alternativas están separadas por 2 mm y se prueban de la más cercana a la más lejana. La disponibilidad depende del proveedor.');
+    check(minRoller<maxRoller,'Con '+name+', el rodillo debe medir al menos '+n(minRoller)+' mm según la referencia de la tabla 17-2 y menos de '+n(maxRoller)+' mm por el espacio entre el pivote y el rodillo.');
     const alternatives=[];
-    for(let trial=Math.ceil(minRoller/2)*2;trial<300-driver*1000;trial+=2) {
+    for(let trial=Math.ceil(minRoller/2)*2;trial<maxRoller;trial+=2) {
       if(trial!==proposed) alternatives.push(trial);
     }
     alternatives.sort((a,b)=>Math.abs(a-proposed)-Math.abs(b-proposed));
     const candidates=[proposed,...alternatives];
     let geometry, rollerDiameter, rejection;
     for(const trial of candidates){
+      add('iteration','Candidato de rodillo · '+n(trial)+' mm');
       if(trial<minRoller){
-        add('text','Rodillo propuesto de '+n(trial)+' mm. Inferior al mínimo de '+n(minRoller)+' mm de tabla 17-2.');
+        add('text','El diámetro queda por debajo del mínimo de referencia de '+n(minRoller)+' mm de la tabla 17-2.');
+        continue;
+      }
+      if(trial>=maxRoller){
+        add('text','El diámetro supera el espacio disponible entre la polea motriz y el rodillo.');
         continue;
       }
       try {
         geometry=tensorGeometry({...c,idlerRadius:trial/2},driven,driver,tightAngle,check);
       } catch(error) {
         rejection=error.message;
-        add('text','Rodillo de '+n(trial)+' mm. '+rejection);
+        add('text',rejection);
         continue;
       }
       rollerDiameter=trial;
-      add('text','Rodillo de '+n(trial)+' mm. Cumple el mínimo geométrico de referencia y conserva contacto en el recorrido.');
+      add('text','Cumple el mínimo geométrico de referencia y conserva contacto en el recorrido.');
       break;
     }
     check(geometry,'La selección del rodillo no tiene solución geométrica. '+(rejection||'El mínimo de tabla excede el espacio disponible.'));
@@ -129,20 +153,9 @@ function calculate(c) {
     const speed = Math.PI * driver * c.rpm / 60;
     const delta = motorPower / speed;
     const ratio=Math.exp(friction*Math.min(smallWrap,largeWrap));
-    add('heading', 'Propuesta y datos de catálogo');
-    add('text', name + ' · tabla 17-2. Distancia entre centros y orientación propuestas.');
-    eq(math`D=${mm(driven)};\quad C=${mm(c.centers)};\quad \beta=${n(c.angle)}^\circ`);
-    eq(math`t=${mm(thickness)};\quad \mu=${n(friction)};\quad d_{min}=${mm(minimumIn*inch)}`);
-    eq(math`S_{perm}=${display(allowableIn,'lbf/in')}(4.448221615/0.0254)=${display(allowable,'N/m')}`);
-    eq(math`\rho=\frac{\gamma}{g}=\frac{${n(weightIn,5)}(4.448221615)}{(0.0254)^3(9.80665)}=${dual(density,'kg/m^3',inch**3/.45359237,'lb/in^3')}`);
-    add('note', 'La tensión permisible de la tabla 17-2 corresponde a 600 ft/min. Se emplea como referencia para iterar el ancho; el resultado es preliminar si la velocidad difiere o hay flexión inversa.');
-    if (name.startsWith('Cuero')) add('note', 'Se utiliza el extremo superior de 0.045 lbf/in³ del intervalo de la tabla 17-2 para el cuero.');
     add('heading', 'Geometría y velocidad de la banda');
     add('note','El mínimo de la tabla 17-2 sirve de comparación geométrica. Para el rodillo de contraflexión hace falta el diámetro mínimo específico en flexión inversa.');
     add('text', 'Banda abierta, relación de tensiones con fuerza centrífuga y balance de potencia (apuntes, pp. 40–47).');
-    eq(math`d=D/i_b=${n(driven)}/${n(c.ratio)}=${mm(driver)}`);
-    eq(math`d_{menor}=${mm(small)}${small >= minimumIn*inch ? '\\ge ' : '<'}d_{min}=${mm(minimumIn*inch)}`);
-    check(small >= minimumIn * inch, 'La polea menor queda por debajo del diámetro mínimo del material.');
     add('text','Plano, p. 3. Se interpreta el pivote en el eje de la polea motriz y el extremo del brazo como centro del rodillo y anclaje móvil. El radio del rodillo y el ángulo inicial son propuestas. Se usan 150 mm de pivote a anclaje móvil y 180 mm del pivote al nivel del anclaje fijo. Se supone el anclaje fijo bajo el extremo del brazo horizontal.');
     add('text','Se calculan tangentes internas a ambos lados del rodillo y una tangente exterior en el ramal tenso. Los ángulos del centro a centro y las longitudes se indican para la posición intermedia.');
     eq(math`\gamma_t=${n(tightAngle*180/Math.PI)}^\circ;\quad \gamma_{f,c}=${n(nominal.b*180/Math.PI)}^\circ;\quad \gamma_{f,m}=${n(nominal.m*180/Math.PI)}^\circ`);
@@ -152,8 +165,10 @@ function calculate(c) {
     eq(math`\Delta F=P_m/v=${n(motorPower)}/${n(speed)}=${force(delta)}`);
     eq(math`R_{\lim}=e^{\mu\min(\theta_m,\theta_c)}=e^{(${n(friction)})(${n(Math.min(smallWrap,largeWrap),5)})}=${n(ratio,5)}`);
 
+    const centrifugalPerWidth=density*thickness*speed**2;
+    check(centrifugalPerWidth<allowable,'Para '+name+', la tensión centrífuga por unidad de ancho supera o iguala la referencia de la tabla 17-2. Aumentar el ancho no resuelve la propuesta.');
     const tension = width => {
-      const centrifugal = density * width * thickness * speed ** 2;
+      const centrifugal = centrifugalPerWidth * width;
       const states=tensorLoads(geometry,delta,centrifugal,friction,c.springRate,tightAngle);
       const governing=states.reduce((worst,state)=>state.tight>worst.tight?state:worst);
       return {centrifugal,slack:governing.slack,tight:governing.tight,states};
@@ -188,6 +203,7 @@ function calculate(c) {
     }
     add('heading', 'Selección y comprobación final');
     check(error < tolerance, 'El ancho no convergió después de 100 iteraciones.');
+    add('text','Se prueban anchos en incrementos de diseño de 10 mm. La tabla 17-2 da la tensión por unidad de ancho. La disponibilidad de la medida resultante depende del proveedor.');
     const fitsWidth = candidate => !(name.startsWith('Cuero') && [6,9].includes(minimumIn) &&
       candidate>=8*inch && Math.min(small,rollerDiameter/1000)<(minimumIn+2)*inch);
     let provisional = Math.ceil(width*100-1e-9);
@@ -236,12 +252,12 @@ function calculate(c) {
     add('note','Dato faltante para contraflexión y vida: diámetro mínimo de rodillo exterior para la banda elegida y curva de duración frente a flexiones inversas, o ficha del fabricante que califique la configuración. El rodillo propuesto mide '+n(rollerDiameter)+' mm y cada punto de la banda pasa por él aproximadamente '+n(lapsPerSecond,2)+' veces por segundo en marcha continua. Hace falta definir la vida objetivo de banda y su ciclo de servicio.');
     const beltReview={demandImperial,allowableIn,operatingFpm,maximumGrip,lapsPerSecond};
     belt = {selected,speed,length,capacity,...final,fy:mid.fy,fz:mid.fz,rollerDiameter,driver,driven,review:beltReview};
-    const design = finishDesign(c, power, belt, entries, check);
+    design = finishDesign(c, power, belt, entries, check);
     add('section','Brazo tensor y resorte de tensión');
     const spring = springDesign(c, belt, add, check);
     add('heading','Conclusión y especificaciones de la propuesta');
     add('text','Motor nominal de '+c.nominal+' kW para '+n(motorPower/1000)+' kW requeridos. Banda '+name+' de '+n(selected*1000)+' mm, longitud nominal '+n(length)+' m y poleas de '+n(driver*1000)+' y '+n(driven*1000)+' mm.');
-    add('text','Engranes '+c.np+'/'+c.ng+' dientes, '+steels[c.gearSteel].label+', módulo '+n(design.module)+' mm y cara '+n(design.faceMm)+' mm. Flecha '+steels[design.shaftSteelIndex].label+' de '+n(design.diameter)+' mm y rodamientos serie 02 de '+n(design.diameter)+' mm de agujero.');
+    add('text','Engranes '+c.np+'/'+c.ng+' dientes, '+steels[c.gearSteel].label+', diámetros primitivos de '+n(design.pinion)+' y '+n(design.gear)+' mm, módulo '+n(design.module)+' mm y cara '+n(design.faceMm)+' mm. Flecha '+steels[design.shaftSteelIndex].label+' de '+n(design.diameter)+' mm y rodamientos serie 02 de '+n(design.diameter)+' mm de agujero.');
     add('text','Resorte '+spring.name+' de '+n(spring.selected)+' mm de alambre y '+n(spring.free)+' mm de longitud libre. Verificación cíclica del resorte pendiente de los datos de resistencia de las tablas.');
     add('heading','Fuentes');
     add('text','Enunciado Prensa mecánica, pp. 2–3. Libreta de Diseño de Elementos de Máquinas, pp. 9–22, 28–60. Tablas de clase A-20, A-21, 6-2, 6-4, 10-4, 10-5, 11-1, 11-2 y 17-2.');
@@ -250,7 +266,8 @@ function calculate(c) {
     for(const diagram of designDiagrams(c,power,belt,design,spring)) add('diagram',diagram);
     return {entries, power, belt, design, spring, iterations};
   } catch (error) {
-    add('note', error.message);
-    return {entries, power, belt, iterations, error: error.message};
+    const errorStage=error.stage??entries.filter(entry=>entry.type==='section').length;
+    add('note', 'Propuesta sin cierre en esta corrida. '+error.message);
+    return {entries, power, belt, design, iterations, error: error.message, errorStage};
   }
 }

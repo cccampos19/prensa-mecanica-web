@@ -8,15 +8,15 @@ const downloadPdf=document.querySelector('#download-pdf');
 const pdfStatus=document.querySelector('#pdf-status');
 let generatingPdf=false;
 const defaults = {
-  rpm: 2100, ratio: 1.875, load: 18000, pinion: 160, gear: 640,
+  rpm: 2100, ratio: 1.875, load: 18000,
   gearEff: 100, beltEff: 100, nominal: 75, pulley: 300, centers: 0.90,
   start: 200, angle: 60, belt: 9,
-  np:20, ng:80, phi:20, yp:.322, yg:.426, ktGear:1.8, gearFat:2, gearStatic:4,
+  pd:3.175, np:20, ng:80, faceStart:0, faceStep:5, phi:20, yp:.322, yg:.426, ktGear:1.8, gearFat:2, gearStatic:4,
   gearSteel:17, gearFinish:1, x2:120, x3:320, span:620,
-  shaftSteel:-1, shaftFinish:1, shaftStart:40, fillet:.1, kc:.59, ktFlex:1.7,
+  shaftSteel:33, shaftFinish:1, shaftStart:40, fillet:.1, kc:.59, ktFlex:1.7,
   ktTors:1.4, shaftFat:2, shaftStatic:2, temperature:20, reliability:99,
   bearingType:0, life:20000, bearingStatic:1.5,
-  wire:0, travel:20, idlerRadius:56, armAngle:-14, springRate:5.5, preload:35, springIndex:10, springSafety:2, hookRadius:2
+  wire:0, wireStart:4, travel:20, idlerRadius:56, armAngle:-14, springRate:5.5, preload:35, springIndex:10, springSafety:2, hookRadius:2
 };
 const fields = {
   powerFields: [
@@ -26,12 +26,13 @@ const fields = {
   beltFields: [
     ['ratio','Relación de banda'], ['beltEff','Eficiencia de la banda (%)'],
     ['pulley','Diámetro de polea conducida (mm)'], ['centers','Distancia entre centros (m)'],
-    ['start','Ancho inicial propuesto (mm)'], ['angle','Orientación de carga (°)']
+    ['start','Ancho inicial para iterar (mm)'], ['angle','Orientación de carga (°)']
   ],
   gearFields: [
-    ['pinion','Diámetro primitivo del piñón (mm)'], ['gear','Diámetro primitivo de la rueda (mm)'],
-    ['gearEff','Eficiencia de engranes (%)'], ['np','Dientes del piñón'], ['ng','Dientes de la rueda'], ['phi','Ángulo de presión (°)'],
-    ['yp','Lewis · piñón'], ['yg','Lewis · rueda'], ['ktGear','Kt en raíz del diente'],
+    ['pd','Paso diametral propuesto (dientes/in)'],
+    ['np','Dientes del piñón'], ['ng','Dientes de la rueda'], ['phi','Ángulo de presión (°)'],
+    ['faceStart','Ancho de cara inicial (mm, 0 usa 3 pasos)'], ['faceStep','Incremento de fabricación de cara (mm)'],
+    ['gearEff','Eficiencia de engranes (%)'], ['yp','Lewis · piñón'], ['yg','Lewis · rueda'], ['ktGear','Kt en raíz del diente'],
     ['gearFat','Seguridad a fatiga'], ['gearStatic','Seguridad estática']
   ],
   balanceFields: [
@@ -39,7 +40,7 @@ const fields = {
     ['span','Distancia entre apoyos (mm)']
   ],
   shaftFields: [
-    ['shaftStart','Diámetro inicial (mm)'], ['fillet','Radio de filete relativo r/d'],
+    ['shaftStart','Diámetro inicial para iterar (mm)'], ['fillet','Radio de filete relativo r/d'],
     ['ktFlex','Kt en flexión'], ['ktTors','Kts en torsión'],
     ['shaftFat','Índice mínimo de Hencky–Marin'], ['shaftStatic','Seguridad estática'],
     ['temperature','Temperatura de servicio (°C) · flecha y engranes'],
@@ -47,6 +48,7 @@ const fields = {
   ],
   bearingFields: [['life','Vida L10 solicitada (h)'], ['bearingStatic','Seguridad estática']],
   springFields: [
+    ['wireStart','Diámetro de alambre inicial (mm)'],
     ['travel','Recorrido axial del resorte (mm)'], ['idlerRadius','Radio del rodillo propuesto (mm)'],
     ['armAngle','Ángulo inicial del brazo (° desde la horizontal hacia la izquierda; negativo hacia abajo)'],
     ['springRate','Rigidez propuesta del resorte (N/mm)'],
@@ -78,15 +80,13 @@ function addSelect(group, name, title, labels, values=labels.map((_,i)=>i)) {
 }
 const steelLabels=steels.map(steel=>steel.label);
 addSelect('gearFields','gearFinish','Acabado',finishes.map(row=>row[0]));
-addSelect('gearFields','gearSteel','Acero',steelLabels);
+addSelect('gearFields','gearSteel','Acero propuesto para los engranes',steelLabels);
 addSelect('shaftFields','shaftFinish','Acabado',finishes.map(row=>row[0]));
-addSelect('shaftFields','shaftSteel','Acero inicial de la flecha',
-  ['Selección automática · tablas A-20/A-21',...steelLabels],
-  [-1,...steels.map((_,i)=>i)]);
+addSelect('shaftFields','shaftSteel','Acero propuesto para la flecha',steelLabels);
 addSelect('shaftFields','kc','Factor de carga · tabla de clase',shaftLoadFactors.map(item=>item.label),shaftLoadFactors.map(item=>item.value));
 addSelect('bearingFields','bearingType','Tipo · serie 02',['Ranura profunda','Contacto angular']);
 
-addSelect('springFields','wire','Alambre · tablas 10-4 y 10-5',springWires.map(wire=>wire.name));
+addSelect('springFields','wire','Alambre propuesto · tablas 10-4 y 10-5',springWires.map(wire=>wire.name));
 
 const select = form.elements.belt;
 catalog.forEach(([name, , minimum], index) => {
@@ -127,6 +127,7 @@ for (const {label, columns, rows} of referenceTables) {
 
 const overview=document.querySelector('#overview');
 const stageTitle=document.querySelector('#stage-title');
+const stageGuidance=document.querySelector('#stage-guidance');
 const stageResult=document.querySelector('#stage-result');
 const stageMaterials=document.querySelector('#stage-material');
 const stageCalculation=document.querySelector('#stage-calculation');
@@ -140,6 +141,12 @@ const stages=[
   ['Brazo tensor y resorte','springFields'],
   ['Diagramas de la propuesta',null]
 ];
+const guides={
+  2:'Elige una banda de la tabla 17-2 y el ancho inicial. La app itera el ancho y comprueba la geometría de las poleas con el material elegido.',
+  3:'El paso diametral y los dientes determinan los diámetros primitivos. Los valores de la tarea reproducen 160 y 640 mm. La app itera el ancho de cara con el acero elegido.',
+  5:'Elige el acero y el diámetro inicial. La app calcula el mínimo y verifica los diámetros compatibles con los rodamientos de la tabla 11-2.',
+  7:'Elige el alambre y su diámetro inicial. La app dimensiona el resorte dentro del intervalo de esa fila.'
+};
 let current;
 let edited=false;
 let activeStage=1;
@@ -170,6 +177,8 @@ function showView() {
 
   const [title,fieldset]=stages[activeStage-1];
   stageTitle.textContent=title;
+  stageGuidance.textContent=guides[activeStage]||'';
+  stageGuidance.hidden=!guides[activeStage];
   form.hidden=!fieldset;
   selectEditor(fieldset);
   stageResult.hidden=!fieldset;
@@ -203,14 +212,18 @@ function stageFacts(result,stage,includeSelection){
       ['Velocidad de salida',metric(power.outRpm,'rpm',0)]
     ];
     case 2: return belt&&[
-      ['Ancho propuesto',metric(belt.selected*1000,'mm',0)],
+      ['Ancho calculado',metric(belt.selected*1000,'mm')],
       ['Diámetro del rodillo',metric(belt.rollerDiameter,'mm',0)],
       ['Demanda de tensión',metric(belt.review.demandImperial,'lbf/in')]
     ];
     case 3: return design&&[
-      ['Ancho de cara',metric(design.faceMm,'mm',0)],
+      ['Ancho de cara',metric(design.faceMm,'mm')],
+      ['Paso diametral',metric(design.diametral,'dientes/in',4)],
       ['Módulo',metric(design.module,'mm')],
-      ['Factor mínimo a fatiga',metric(minimum(design.gearFatigue),'')]
+      ['Diámetro primitivo del piñón',metric(design.pinion,'mm')],
+      ['Diámetro primitivo de la rueda',metric(design.gear,'mm')],
+      ['Factor mínimo a fatiga',metric(minimum(design.gearFatigue),'')],
+      ['Factor mínimo estático',metric(minimum(design.gearStatic),'')]
     ];
     case 4: return design&&[
       ['Reacción máxima · apoyo 1',metric(design.loads[0]/1000,'kN')],
@@ -218,7 +231,7 @@ function stageFacts(result,stage,includeSelection){
       ['Momento flector máximo',metric(Math.max(...design.moments),'N·m')]
     ];
     case 5: return design&&[
-      ...(includeSelection?[['Acero seleccionado',steels[design.shaftSteelIndex]?.label||'—']]:[]),
+      ...(includeSelection?[['Acero propuesto',steels[design.shaftSteelIndex]?.label||'—']]:[]),
       ['Diámetro comercial',metric(design.diameter,'mm',0)],
       ['Diámetro continuo',metric(design.continuous,'mm')],
       ['Índice mínimo de Hencky–Marin',metric(minimum(design.shaftFatigue),'')],
@@ -238,16 +251,21 @@ function stageFacts(result,stage,includeSelection){
   }
 }
 
-function stageCaution(result,stage){
-  if(stage===2&&result.belt) return 'Pendiente de servicio: la tabla 17-2 da el límite a 600 ft/min. La banda trabaja a '+metric(result.belt.review.operatingFpm,'ft/min',0)+' y pasa por un rodillo de contraflexión.';
-  if(stage===3&&result.design) return 'La comprobación a fatiga usa el método de los apuntes y los factores de Lewis y entalle propuestos. Coteja esos factores con el perfil real del diente.';
-  if(stage===5&&result.design) {
-    const {stockReview}=result.design;
-    if(!stockReview.a20CoversFinishedSizes) return 'Fatiga provisional. A-20 cubre 18–32 mm y A-21 da promedios de probetas de barras de 25.4 mm. La flecha calculada tiene base de '+metric(stockReview.base,'mm')+' y hombro de '+metric(stockReview.shoulder,'mm')+'.';
-    return 'Se verifica la fatiga con la convención de Hencky–Marin de la libreta. Confirma el diámetro y el estado de suministro de la barra.';
+function failureStage(result) {
+  return result.errorStage||result.entries.filter(entry=>entry.type==='section').length||1;
+}
+
+function stageStatus(result,stage){
+  if(result.error && stage===failureStage(result)) return 'Propuesta no viable en esta corrida. '+result.error;
+  if(result.error && stage>failureStage(result)) return 'Pendiente. La corrida se detuvo en '+stages[failureStage(result)-1][0]+'.';
+  if(stage===1&&result.power) return 'Cumple la potencia nominal propuesta.';
+  if(stage===2&&result.belt) return 'Cumple la geometría y la tensión de referencia del modelo. La tabla 17-2 da el límite a 600 ft/min. Quedan pendientes la capacidad a '+metric(result.belt.review.operatingFpm,'ft/min',0)+' y la contraflexión.';
+  if(stage===3&&result.design) return 'Cumple fatiga y estática con el acero, los factores de Lewis y el entalle propuestos. Los factores de Lewis deben corresponder al perfil de los dientes elegidos.';
+  if(stage===5&&result.design?.stockReview) {
+    return 'Cumple fatiga y estática en el modelo. La validez para fabricación depende del diámetro y estado de suministro de la barra.';
   }
-  if(stage===6&&result.design) return 'La vida L10 comprueba fatiga de contacto con las cargas calculadas y las capacidades de la tabla 11-2.';
-  if(stage===7&&result.spring) return 'Fatiga del cuerpo y los ganchos pendiente. Se calculan los esfuerzos alternantes y medios, pero las tablas 10-4 y 10-5 no incluyen resistencia cíclica.';
+  if(stage===6&&result.design?.bearingLife) return 'Cumple el montaje, la carga estática y la vida L10 calculados con la tabla 11-2.';
+  if(stage===7&&result.spring) return 'Cumple estática y longitud en el modelo. La verificación de fatiga del cuerpo y los ganchos requiere su resistencia cíclica.';
   return '';
 }
 
@@ -255,39 +273,38 @@ function renderStageResult() {
   stageResult.replaceChildren();
   if(!current||activeStage===8) return;
   const facts=stageFacts(current,activeStage,!edited);
-  if(!facts) return;
   if(edited){
     const stale=document.createElement('p');
     stale.className='note';
     stale.textContent='Resultados de la última corrida. Pulsa Calcular para aplicar los cambios.';
     stageResult.append(stale);
   }
-  const list=document.createElement('dl');
-  list.className='stage-facts';
-  for(const [label,value] of facts){
-    const item=document.createElement('div');
-    item.className='fact';
-    const term=document.createElement('dt');
-    term.textContent=label;
-    const definition=document.createElement('dd');
-    definition.textContent=value;
-    item.append(term,definition);
-    list.append(item);
+  if(facts){
+    const list=document.createElement('dl');
+    list.className='stage-facts';
+    for(const [label,value] of facts){
+      const item=document.createElement('div');
+      item.className='fact';
+      const term=document.createElement('dt');
+      term.textContent=label;
+      const definition=document.createElement('dd');
+      definition.textContent=value;
+      item.append(term,definition);
+      list.append(item);
+    }
+    stageResult.append(list);
   }
-  stageResult.append(list);
-  if(activeStage===5&&!edited&&current.design.shaftTrials?.length){
+  if(activeStage===5&&!edited&&current.design?.shaftTrials?.length){
     const attempts=document.createElement('p');
-    const initial=formValues().shaftSteel;
-    const start=initial===-1?'Selección automática. ':'Acero inicial: '+steels[initial].label+'. ';
     const count=current.design.shaftTrials.length;
-    attempts.textContent=start+(count===1?'Una combinación evaluada. ':count+' combinaciones evaluadas. ')+'Consulta el orden y los resultados en Desarrollo del cálculo.';
+    attempts.textContent=(count===1?'Se comprobó un diámetro de catálogo.':'Se comprobaron '+count+' diámetros de catálogo.')+' Consulta las iteraciones en Desarrollo del cálculo.';
     stageResult.append(attempts);
   }
-  const caution=stageCaution(current,activeStage);
-  if(caution){
+  const status=edited?'':stageStatus(current,activeStage);
+  if(status){
     const item=document.createElement('p');
     item.className='note';
-    item.textContent=caution;
+    item.textContent=status;
     stageResult.append(item);
   }
 }
@@ -337,8 +354,12 @@ function renderOverview(result) {
   if(result.error){
     const notice=document.createElement('p');
     notice.className='note';
-    notice.textContent=result.error;
-    overview.append(notice);
+    notice.textContent='Propuesta no viable en esta corrida. '+result.error;
+    const link=document.createElement('a');
+    link.className='button secondary';
+    link.href='#etapa-'+failureStage(result);
+    link.textContent='Revisar la propuesta';
+    overview.append(notice,link);
     return;
   }
   const {power,belt,design,spring}=result;
@@ -347,7 +368,7 @@ function renderOverview(result) {
     ['Ancho de banda',number(1000*belt.selected)+' mm','Rodillo de '+number(belt.rollerDiameter)+' mm',2],
     ['Engranes',number(design.faceMm)+' mm de cara','Módulo '+number(design.module)+' mm',3],
     ['Equilibrio de la flecha',metric(Math.max(...design.moments),'N·m'),'Momento flector máximo',4],
-    ['Flecha',number(design.diameter)+' mm',edited?'Selección pendiente de recálculo':steels[design.shaftSteelIndex]?.label||'Diámetro comercial',5],
+    ['Flecha',number(design.diameter)+' mm',edited?'Material pendiente de recálculo':steels[design.shaftSteelIndex]?.label||'Diámetro comercial',5],
     ['Rodamientos',number(design.diameter)+' mm de agujero','Vida mínima L10: '+metric(Math.min(...design.bearingLife),'h',0),6],
     ['Resorte',number(spring.selected)+' mm de alambre',number(spring.fmin,1)+' a '+number(spring.fmax,1)+' N',7]
   ];
@@ -482,7 +503,7 @@ function run() {
   render(current.entries);
   renderOverview(current);
   showView();
-  calculationStatus.textContent=current.error?current.error:'Caso calculado · siete etapas';
+  calculationStatus.textContent=current.error?'Corrida detenida · '+stages[failureStage(current)-1][0]:'Propuesta calculada con los datos de las siete etapas';
   calculationStatus.dataset.state=current.error?'error':'ready';
   updateDownloads();
   if(!generatingPdf) pdfStatus.textContent='';
@@ -490,7 +511,13 @@ function run() {
 }
 form.addEventListener('submit',event=>{
   event.preventDefault();
+  const previous=current;
   run();
+  if(current!==previous&&current.error){
+    location.hash='etapa-'+failureStage(current);
+    showView();
+    if(!stageCalculation.hidden) stageCalculation.open=true;
+  }
 });
 form.addEventListener('input',event=>{
   if(!event.target.name) return;
@@ -510,9 +537,13 @@ document.querySelector('#restore').addEventListener('click',()=>{
   run();
 });
 function updateDownloads(){
-  const available=Boolean(current?.spring)&&!edited;
+  const available=!edited&&Boolean(current?.entries.some(entry=>entry.type==='eq'));
   download.disabled=!available;
   downloadPdf.disabled=!available||generatingPdf;
+}
+
+function memoryFilename(result,extension){
+  return (result.error?'memoria_prensa_propuesta_no_viable':'memoria_prensa')+'.'+extension;
 }
 
 function saveDocument(blob,name){
@@ -525,7 +556,7 @@ function saveDocument(blob,name){
 }
 
 download.addEventListener('click',()=>{
-  saveDocument(new Blob([tex(current.entries)],{type:'application/x-tex;charset=utf-8'}),'memoria_prensa.tex');
+  saveDocument(new Blob([tex(current.entries)],{type:'application/x-tex;charset=utf-8'}),memoryFilename(current,'tex'));
 });
 downloadPdf.addEventListener('click',async()=>{
   const snapshot=current;
@@ -540,7 +571,7 @@ downloadPdf.addEventListener('click',async()=>{
       pdfStatus.textContent='Los datos cambiaron. Genera el PDF de la corrida actual.';
       return;
     }
-    saveDocument(document,'memoria_prensa.pdf');
+    saveDocument(document,memoryFilename(snapshot,'pdf'));
     pdfStatus.textContent='PDF listo.';
   }catch(error){
     pdfStatus.textContent=error.message||'No se pudo generar el PDF.';
@@ -549,4 +580,4 @@ downloadPdf.addEventListener('click',async()=>{
     updateDownloads();
   }
 });
-window.addEventListener('DOMContentLoaded',run);
+window.addEventListener('DOMContentLoaded',()=>run());

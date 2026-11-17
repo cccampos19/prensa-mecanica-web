@@ -14,6 +14,8 @@ function springDesign(c,belt,add,check){
   const wire=springWires[c.wire];
   check(wire&&c.preload>0&&c.preload<100&&c.springSafety>=1&&
     c.springIndex>=6&&c.springIndex<=12&&c.hookRadius>=1,'Revisa alambre, tensión inicial y factores del tensor.');
+  const wireStart=c.wireStart??4;
+  check(Number.isFinite(wireStart)&&wireStart>0,'El diámetro inicial del alambre debe ser positivo.');
   const first=belt.states[0], last=belt.states.at(-1);
   const fmin=first.springForce, fmax=last.springForce;
   const k=c.springRate, fi=fmin*c.preload/100, mount=first.len*1000;
@@ -33,7 +35,7 @@ function springDesign(c,belt,add,check){
   text('Fᵢ representa la tensión inicial de fabricación. F mínima es la carga instalada. El modelo usa la curva F = Fᵢ + kx después de abrir las espiras.');
 
   head('Material, esfuerzos e iteraciones');
-  text(wire.name+' · tablas 10-4 y 10-5. Se reutiliza la rigidez de la libreta (pp. 49–50), Wahl y la resistencia del alambre. Se usan los límites elásticos inferiores de la tabla 10-5. Para los esfuerzos en los extremos se conserva la geometría de gancho de Shigley como método de cálculo.');
+  text(wire.name+' · tablas 10-4 y 10-5. Se conserva el material propuesto durante todas las iteraciones. Se usa la rigidez de la libreta (pp. 49–50), el factor de Wahl y los límites elásticos inferiores de la tabla 10-5. Los esfuerzos en los extremos se calculan con la geometría de gancho de Shigley.');
   const C=c.springIndex;
   const kw=(4*C-1)/(4*C-4)+.615/C;
   const Ci=2*c.hookRadius;
@@ -53,7 +55,9 @@ function springDesign(c,belt,add,check){
     ];
     return {sut,required};
   }
-  let d=Math.min(wire.max,Math.max(wire.min,4)), converged=false;
+  let d=Math.min(wire.max,Math.max(wire.min,wireStart)), converged=false;
+  text('Diámetro inicial propuesto de '+n(wireStart)+' mm. Intervalo del material de '+n(wire.min)+' a '+n(wire.max)+' mm.');
+  if(d!==wireStart) text('La primera iteración usa '+n(d)+' mm, el extremo más cercano del intervalo tabulado.');
   for(let i=1;i<=100;i++){
     add('iteration','Iteración '+i+' · diámetro del alambre');
     const {sut,required}=sizing(d);
@@ -71,12 +75,7 @@ function springDesign(c,belt,add,check){
   }
   check(converged,'El diámetro del resorte no convergió.');
   head('Propuesta de fabricación y comprobaciones');
-  let selected=Math.ceil(d*2)/2;
-  while(selected<=wire.max && Math.max(...sizing(selected).required)>selected) {
-    text('Candidato de '+n(selected)+' mm insuficiente tras recalcular las resistencias de tabla. Se incrementa 0.5 mm.');
-    selected+=.5;
-  }
-  check(selected<=wire.max,'El diámetro redondeado supera el rango de la tabla 10-4.');
+  text('Se prueban diámetros en incrementos de 0.5 mm como propuestas de fabricación dentro del rango tabulado. La disponibilidad de esas medidas depende del proveedor.');
   function dimensions(d){
     const D=C*d;
     const inches=d/25.4;
@@ -84,10 +83,28 @@ function springDesign(c,belt,add,check){
     const active=G*d**4/(8*D**3*k);
     return {D,G,active,envelope:active*d+4*c.hookRadius*d};
   }
+  function tryDiameter(candidate, label){
+    add('iteration',label+' · '+n(candidate)+' mm');
+    if(candidate>wire.max) {
+      text('El diámetro supera el límite de '+n(wire.max)+' mm de la tabla 10-4.');
+      return false;
+    }
+    const required=Math.max(...sizing(candidate).required);
+    const {envelope}=dimensions(candidate);
+    const viable=candidate>=required&&envelope<=free;
+    eq(math`d=${mm(candidate)};\quad d_{\min,\mathrm{est}}=${mm(required)};\quad L_{\mathrm{est}}=${mm(envelope)};\quad L_0=${mm(free)}`);
+    text(viable?'Cumple la resistencia estática y el espacio disponible.':
+      candidate<required?'El diámetro queda por debajo del mínimo estático calculado para el material.':'La longitud estimada supera el espacio disponible.');
+    return viable;
+  }
+  let selected=Math.max(Math.ceil(wire.min*2),Math.floor(d*2))/2;
+  while(selected<=wire.max&&!tryDiameter(selected,'Candidato')) selected+=.5;
+  check(selected<=wire.max,'El alambre elegido no da una propuesta en incrementos de 0.5 mm que cumpla la resistencia estática y el espacio disponible dentro del rango de la tabla 10-4.');
   const minimumSelected=selected;
   const reserve=selected+.5;
-  const useReserve=reserve<=wire.max&&Math.max(...sizing(reserve).required)<=reserve&&dimensions(reserve).envelope<=free;
+  const useReserve=tryDiameter(reserve,'Candidato de reserva');
   if(useReserve) selected=reserve;
+  head('Dimensiones y verificación del alambre elegido');
   text(useReserve
     ? 'El mínimo redondeado en estática es '+n(minimumSelected)+' mm. Se adopta el siguiente incremento de 0.5 mm, '+n(selected)+' mm, como reserva provisional.'
     : 'El incremento adicional de 0.5 mm queda fuera del rango del material, de la resistencia calculada o del espacio disponible. Se conserva '+n(selected)+' mm.');

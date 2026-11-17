@@ -152,19 +152,7 @@ function stageMaterial(stage,values,result) {
     case 2: return bandMaterial(values,result);
     case 3: return steelMaterial(values.gearSteel,values.gearFinish,false);
     case 5: {
-      const selected=result?.design?.shaftSteelIndex;
-      if(selected==null&&values.shaftSteel===-1) return [{
-        title:'Selección automática de acero',
-        source:'Tablas A-20 y A-21',
-        rows:[],
-        note:result?.error
-          ?'La corrida no llegó a una selección de acero. Revisa el mensaje del cálculo.'
-          :'Pulsa Calcular para probar las filas de las tablas y ver las propiedades del acero elegido.'
-      }];
-      const cards=steelMaterial(selected??values.shaftSteel,values.shaftFinish,true);
-      if(selected==null&&cards.length){
-        cards[0].title='Preferencia inicial · '+cards[0].title;
-      }
+      const cards=steelMaterial(values.shaftSteel,values.shaftFinish,true);
       const stock=result?.design?.stockReview;
       if(stock) cards.push({
         title:'Alcance para esta flecha',

@@ -41,23 +41,24 @@
   <section id="resultados" class="view" aria-labelledby="results-title">
     <div class="section-title">
       <h2 id="results-title">Resultados del cálculo</h2>
-      <a class="button secondary" href="#etapa-1">Editar datos de la tarea</a>
+      <a class="button secondary" href="#etapa-1">Editar propuesta</a>
     </div>
     <div id="overview"></div>
   </section>
   <section id="datos" class="view" aria-labelledby="stage-title" hidden>
     <h2 id="stage-title">Potencia y velocidades</h2>
+    <p id="stage-guidance" hidden></p>
     <div id="stage-result"></div>
     <div class="stage-workspace">
     <form id="inputs" novalidate>
       <div class="editor">
         <fieldset id="powerFields"><legend>Datos de potencia</legend></fieldset>
-        <fieldset id="beltFields" hidden><legend>Datos de banda y poleas</legend><label>Material · tabla 17-2<select name="belt"></select></label></fieldset>
-        <fieldset id="gearFields" hidden><legend>Datos de engranes</legend></fieldset>
+        <fieldset id="beltFields" hidden><legend>Propuesta de banda y poleas</legend><label>Material propuesto · tabla 17-2<select name="belt"></select></label></fieldset>
+        <fieldset id="gearFields" hidden><legend>Propuesta de engranes</legend></fieldset>
         <fieldset id="balanceFields" hidden><legend>Posiciones sobre la flecha</legend></fieldset>
-        <fieldset id="shaftFields" hidden><legend>Datos de dimensionamiento</legend></fieldset>
+        <fieldset id="shaftFields" hidden><legend>Propuesta de flecha</legend></fieldset>
         <fieldset id="bearingFields" hidden><legend>Datos de rodamientos</legend></fieldset>
-        <fieldset id="springFields" hidden><legend>Datos del brazo tensor y resorte</legend></fieldset>
+        <fieldset id="springFields" hidden><legend>Propuesta de brazo tensor y resorte</legend></fieldset>
         <div class="actions">
           <button type="submit">Calcular</button>
           <button class="secondary" type="button" id="restore">Restaurar datos de la tarea</button>
@@ -80,12 +81,12 @@
 </main>
 <script src="catalogos.js?v=12"></script>
 <script src="tensor.js?v=6"></script>
-<script src="motor.js?v=15"></script>
-<script src="transmision.js?v=14"></script>
-<script src="resorte.js?v=12"></script>
-<script src="diagramas.js?v=6"></script>
+<script src="motor.js?v=16"></script>
+<script src="transmision.js?v=16"></script>
+<script src="resorte.js?v=16"></script>
+<script src="diagramas.js?v=16"></script>
 <script src="memoria-pdf.js?v=8"></script>
-<script src="materiales.js?v=14"></script>
-<script src="app.js?v=14"></script>
+<script src="materiales.js?v=16"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
