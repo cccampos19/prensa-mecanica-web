@@ -91,14 +91,16 @@ function calculate(c) {
     const driver = driven / c.ratio;
     check(2 * c.centers > driven + driver, 'La distancia entre centros debe superar la suma de los radios.');
     const small = Math.min(driver, driven);
-    const large = Math.max(driver, driven);
-    const alpha = Math.asin((large - small) / (2 * c.centers));
-    const smallWrap = Math.PI - 2 * alpha;
-    const largeWrap = Math.PI + 2 * alpha;
-    const length = 2*c.centers*Math.cos(alpha) + (large*largeWrap + small*smallWrap)/2;
+    const tightAngle=c.angle*Math.PI/180+Math.asin((driven-driver)/(2*c.centers));
+    check(c.springRate>0,'La rigidez propuesta del resorte debe ser positiva.');
+    check(2*c.idlerRadius>=1000*minimumIn*inch, "El rodillo queda por debajo del diámetro mínimo tabulado para la banda.");
+    const geometry=tensorGeometry(c,driven,driver,tightAngle,check);
+    add('text','El texto del enunciado fija 2100 rpm y 18000 kgf·cm para el caso de la tarea. El plano se usa para la geometría y muestra rotulados 1800 rpm y 15000 kgf·cm.');
+    const nominal=geometry[50], smallWrap=nominal.wrapMotor, largeWrap=nominal.wrapDriven;
+    const length=nominal.length;
     const speed = Math.PI * driver * c.rpm / 60;
     const delta = motorPower / speed;
-    const ratio = Math.exp(friction * smallWrap);
+    const ratio=Math.exp(friction*Math.min(smallWrap,largeWrap));
     add('heading', 'Propuesta y datos de catálogo');
     add('text', name + ' · tabla 17-2. Distancia entre centros y orientación propuestas.');
     eq(math`D=${mm(driven)};\quad C=${mm(c.centers)};\quad \beta=${n(c.angle)}^\circ`);
@@ -108,30 +110,35 @@ function calculate(c) {
     add('note', 'La tabla 17-2 da la tensión permisible a 600 ft/min. Se conserva la aplicación del ejemplo de clase a otra velocidad. Falta comprobar este criterio a la velocidad real.');
     if (name.startsWith('Cuero')) add('note', 'Se toma 0.040 lbf/in³ como peso específico representativo del rango de catálogo.');
     add('heading', 'Geometría y velocidad de la banda');
+    add('note','Se comprueba el diámetro del rodillo con el mínimo de tabla 17-2 como referencia. La autorización de flexión inversa y la tensión admisible a la velocidad real requieren datos del fabricante.');
     add('text', 'Banda abierta, relación de tensiones con fuerza centrífuga y balance de potencia (apuntes, pp. 40–47).');
     eq(math`d=D/i_b=${n(driven)}/${n(c.ratio)}=${mm(driver)}`);
     eq(math`d_{menor}=${mm(small)}${small >= minimumIn*inch ? '\\ge ' : '<'}d_{min}=${mm(minimumIn*inch)}`);
     check(small >= minimumIn * inch, 'La polea menor queda por debajo del diámetro mínimo del material.');
-    eq(math`\alpha=\arcsin\frac{d_{mayor}-d_{menor}}{2C}=\arcsin\frac{${n(large)}-${n(small)}}{2(${n(c.centers)})}=${display(alpha,'rad',5)}`);
-    eq(math`\theta_{menor}=\pi-2\alpha=\pi-2(${n(alpha,5)})=${display(smallWrap,'rad',5)}`);
-    eq(math`\theta_{mayor}=\pi+2\alpha=\pi+2(${n(alpha,5)})=${display(largeWrap,'rad',5)}`);
-    eq(math`L=2C\cos\alpha+\frac{d_{mayor}\theta_{mayor}+d_{menor}\theta_{menor}}{2}`);
-    eq(math`L=2(${n(c.centers)})\cos(${n(alpha,5)})+\frac{(${n(large)})(${n(largeWrap,5)})+(${n(small)})(${n(smallWrap,5)})}{2}=${dual(length,'m',1/(12*inch),'ft')}`);
+    add('text','Plano, p. 3. Se interpreta el pivote en el eje de la polea motriz y el extremo del brazo como centro del rodillo y anclaje móvil. El radio del rodillo y el ángulo inicial son propuestas. Se usan 150 mm de pivote a anclaje móvil y 180 mm del pivote al nivel del anclaje fijo. Se supone el anclaje fijo bajo el extremo del brazo horizontal.');
+    add('text','Se calculan tangentes internas a ambos lados del rodillo y una tangente exterior en el ramal tenso. Los ángulos del centro a centro y las longitudes se indican para la posición intermedia.');
+    eq(math`\gamma_t=${n(tightAngle*180/Math.PI)}^\circ;\quad \gamma_{f,c}=${n(nominal.b*180/Math.PI)}^\circ;\quad \gamma_{f,m}=${n(nominal.m*180/Math.PI)}^\circ`);
+    eq(math`\theta_m=\pi+\gamma_{f,m}-\gamma_t=${display(smallWrap,"rad",5)};\quad\theta_c=\pi+\gamma_t-\gamma_{f,c}=${display(largeWrap,"rad",5)}`);
+    eq(math`L_{banda}=\sum L_{tangentes}+\sum r_i\theta_i=${dual(length,"m",1/(12*inch),"ft")}`);
     eq(math`v=\frac{\pi d n_m}{60}=\frac{\pi(${n(driver)})(${n(c.rpm)})}{60}=${dual(speed,'m/s',60/(12*inch),'ft/min')}`);
     eq(math`\Delta F=P_m/v=${n(motorPower)}/${n(speed)}=${force(delta)}`);
-    eq(math`R=\frac{F_1-F_c}{F_2-F_c}=e^{\mu\theta_{menor}}=e^{(${n(friction)})(${n(smallWrap,5)})}=${n(ratio,5)}`);
+    eq(math`R_{\lim}=e^{\mu\min(\theta_m,\theta_c)}=e^{(${n(friction)})(${n(Math.min(smallWrap,largeWrap),5)})}=${n(ratio,5)}`);
 
     const tension = width => {
       const centrifugal = density * width * thickness * speed ** 2;
-      const slack = centrifugal + delta / (ratio - 1);
-      return {centrifugal, slack, tight: slack + delta};
+      const states=tensorLoads(geometry,delta,centrifugal,friction,c.springRate,tightAngle);
+      const governing=states.reduce((worst,state)=>state.tight>worst.tight?state:worst);
+      return {centrifugal,slack:governing.slack,tight:governing.tight,states};
     };
-    function showTensions(width, {centrifugal, slack, tight}) {
-      eq(math`A=bt=(${n(width,8)})(${n(thickness,8)})=${display(width*thickness,'m^2',9)}`);
-      eq(math`F_c=\rho A v^2=(${n(density)})(${n(width*thickness,9)})(${n(speed)})^2=${force(centrifugal)}`);
-      eq(math`F_2=F_c+\frac{\Delta F}{R-1}=${n(centrifugal)}+\frac{${n(delta)}}{${n(ratio,5)}-1}=${force(slack)}`);
-      eq(math`F_1=F_2+\Delta F=${n(slack)}+${n(delta)}=${force(tight)}`);
+    function showTensions(width,{centrifugal,slack,tight,states}){
+      eq(math`A=bt=(${n(width,8)})(${n(thickness,8)})=${display(width*thickness,"m^2",9)}`);
+      eq(math`F_c=\rho Av^2=(${n(density)})(${n(width*thickness,9)})(${n(speed)})^2=${force(centrifugal)}`);
+      eq(math`F_{2,\min}=F_c+\frac{\Delta F}{e^{\mu\min(\theta_m,\theta_c)}-1}`);
+      eq(math`F_{r,0}=\max_j\left[a_j F_{2,\min,j}-k(L_j-L_0)\right]=${force(states[0].springForce)}`);
+      eq(math`F_{2,j}=\frac{F_{r,0}+k(L_j-L_0)}{a_j};\quad \max_j F_{2,j}=${force(slack)}`);
+      eq(math`F_{1,\max}=F_{2,\max}+\Delta F=${n(slack)}+${n(delta)}=${force(tight)}`);
     }
+    add('text','a es la razón de brazos efectivos obtenida del equilibrio de momentos en el pivote. La precarga instalada mínima se escoge para transmitir la potencia sin deslizamiento en 101 posiciones del recorrido con la rigidez propuesta.');
 
     add('heading', 'Dimensionamiento iterativo del ancho');
     add('text', 'Se calcula con cifras completas y se muestran valores redondeados. El criterio de convergencia es un error relativo menor al 3 %.');
@@ -142,7 +149,7 @@ function calculate(c) {
       const next = tensions.tight / allowable;
       error = 100 * Math.abs(next - width) / next;
       check(Number.isFinite(error), 'La propuesta produjo valores fuera del rango numérico.');
-      iterations.push({width, next, error, ...tensions});
+      iterations.push({width, next, error, centrifugal:tensions.centrifugal, slack:tensions.slack, tight:tensions.tight});
       add('iteration', 'Iteración ' + k);
       eq(math`b_{${k}}=${mm(width)}`);
       showTensions(width, tensions);
@@ -167,25 +174,27 @@ function calculate(c) {
     const capacity = allowable * selected;
     eq(math`F_{perm}=S_{perm}b=(${n(allowable)})(${n(selected)})=${force(capacity)}`);
     eq(math`F_1=${force(final.tight)}${final.tight <= capacity ? '\\le ' : '>'}F_{perm}=${force(capacity)}`);
-    check(final.tight <= capacity, 'El ancho redondeado no satisface la tensión permisible. Revisa la propuesta.');
-    eq(math`\frac{F_1-F_c}{F_2-F_c}=\frac{${n(final.tight)}-${n(final.centrifugal)}}{${n(final.slack)}-${n(final.centrifugal)}}=${n(ratio,5)}=R`);
-    eq(math`F_0=\frac{F_1+F_2}{2}=\frac{${n(final.tight)}+${n(final.slack)}}{2}=${force((final.tight+final.slack)/2)}`);
-    add('heading', 'Carga sobre la polea conducida');
-    const axial = (final.tight + final.slack) * Math.cos(alpha);
-    const transverse = delta * Math.sin(alpha) * Math.sign(driven-driver);
-    const beta = c.angle * Math.PI / 180;
-    const fy = axial*Math.cos(beta) - transverse*Math.sin(beta);
-    const fz = axial*Math.sin(beta) + transverse*Math.cos(beta);
-    eq(math`F_{\parallel}=(F_1+F_2)\cos\alpha=(${n(final.tight)}+${n(final.slack)})\cos(${n(alpha,5)})=${force(axial)}`);
-    eq(math`F_{\perp}=\operatorname{sgn}(D-d)\Delta F\sin\alpha=(${Math.sign(driven-driver)})(${n(delta)})\sin(${n(alpha,5)})=${force(transverse)}`);
-    eq(math`F_y=F_{\parallel}\cos\beta-F_{\perp}\sin\beta=(${n(axial)})\cos(${n(c.angle)}^\circ)-(${n(transverse)})\sin(${n(c.angle)}^\circ)=${force(fy)}`);
-    eq(math`F_z=F_{\parallel}\sin\beta+F_{\perp}\cos\beta=(${n(axial)})\sin(${n(c.angle)}^\circ)+(${n(transverse)})\cos(${n(c.angle)}^\circ)=${force(fz)}`);
-    eq(math`|\mathbf F|=\sqrt{F_y^2+F_z^2}=\sqrt{(${n(fy)})^2+(${n(fz)})^2}=${force(Math.hypot(fy,fz))}`);
-    add('note', 'La carga corresponde a las tensiones de la banda abierta. El efecto de la polea auxiliar sobre la dirección de esta carga queda fuera del modelo de banda abierta.');
-    belt = {selected, speed, length, capacity, ...final, fy, fz};
+    check(final.tight <= capacity + 1e-9, 'El ancho redondeado no satisface la tensión permisible. Revisa la propuesta.');
+    add('heading','Carga sobre la polea conducida con el tensor');
+    add('text','En la polea conducida actúan las dos tensiones en sus direcciones tangentes locales. La reacción de la polea auxiliar va a su pivote.');
+    const mid=final.states[50];
+    const maximumGrip=Math.max(...final.states.map(s=>(s.tight-final.centrifugal)/((s.slack-final.centrifugal)*Math.exp(friction*Math.min(s.wrapMotor,s.wrapDriven)))));
+    check(maximumGrip>0&&maximumGrip<=1+1e-9,'La banda pierde condición de tracción en el recorrido.');
+    eq(math`\max_jrac{F_{1,j}-F_c}{(F_{2,j}-F_c)e^{\mu\min(	heta_{m,j},	heta_{c,j})}}=${n(maximumGrip,6)}\le 1`);
+    eq(math`F_y=F_1\cos\gamma_t+F_2\cos\gamma_{f,c}=${n(mid.tight)}\cos(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\cos(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fy)}`);
+    eq(math`F_z=F_1\sin\gamma_t+F_2\sin\gamma_{f,c}=${n(mid.tight)}\sin(${n(tightAngle*180/Math.PI)}^\circ)+${n(mid.slack)}\sin(${n(mid.b*180/Math.PI)}^\circ)=${force(mid.fz)}`);
+    eq(math`|\mathbf F|=\sqrt{(${n(mid.fy)})^2+(${n(mid.fz)})^2}=${force(Math.hypot(mid.fy,mid.fz))}`);
+    belt = {selected,speed,length,capacity,...final,fy:mid.fy,fz:mid.fz};
     const design = finishDesign(c, power, belt, add, check);
     add('section','Brazo tensor y resorte de tensión');
     const spring = springDesign(c, belt, design.kd, design.ke, add, check);
+    add('heading','Conclusión y especificaciones de la propuesta');
+    add('text','Motor nominal de '+c.nominal+' kW para '+n(motorPower/1000)+' kW requeridos. Banda '+name+' de '+n(selected*1000)+' mm, longitud nominal '+n(length)+' m y poleas de '+n(driver*1000)+' y '+n(driven*1000)+' mm.');
+    add('text','Engranes '+c.np+'/'+c.ng+' dientes, '+steels[c.gearSteel].label+', módulo '+n(design.module)+' mm y cara '+n(design.faceMm)+' mm. Flecha '+steels[c.shaftSteel].label+' de '+n(design.diameter)+' mm y rodamientos serie 02 de '+n(design.diameter)+' mm de agujero.');
+    add('text','Resorte ASTM A228 de '+n(spring.selected)+' mm de alambre y '+n(spring.free)+' mm de longitud libre, con factor mínimo de fatiga de gancho '+n(Math.min(...spring.hookFat))+'. Las comprobaciones se refieren a las hipótesis y al ciclo de diseño de esta memoria.');
+    add('heading','Fuentes');
+    add('text','Enunciado Prensa mecánica, pp. 2–3. Libreta de Diseño de Elementos de Máquinas, pp. 9–22, 28–60. Tablas de clase A-20, A-21, 6-2, 6-4, 10-4, 10-5, 11-1, 11-2 y 17-2.');
+    add('text','Budynas y Nisbett, Diseño en ingeniería mecánica de Shigley, 10.ª ed., cap. 10, sección de resortes de tensión y tabla 10-8 (Associated Spring).');
     return {entries, power, belt, design, spring, iterations};
   } catch (error) {
     add('note', error.message);

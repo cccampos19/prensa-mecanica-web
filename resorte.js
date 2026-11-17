@@ -12,37 +12,29 @@ function springDesign(c,belt,kd,ke,add,check){
   const N=v=>dual(v,'N',1/lbf,'lbf');
   const MPa=v=>dual(v,'MPa',1/6.894757293,'kpsi');
   const wire=springWires[c.wire];
-  check(wire&&c.travel>0&&c.mount>0&&c.springLever>0&&c.idlerLever>0&&
-    c.turnMin>0&&c.turnMax>c.turnMin&&c.turnMax<180&&c.preload>0&&c.preload<100&&
-    c.springIndex>=6&&c.springIndex<=12&&c.springSafety>=1&&c.hookRadius>=1,
-    'Revisa recorrido, brazos, ángulos, tensión inicial y factores del tensor.');
-
-  head('Equilibrio del brazo tensor');
-  note('Se interpreta el croquis como una polea auxiliar que desvía el ramal flojo. El modelo preliminar usa brazos perpendiculares efectivos y tensiones iguales a F₂ a ambos lados de la polea. El peso y la fricción del tensor se omiten. Los brazos, el desvío y el recorrido son propuestas editables, no cotas deducidas a escala.');
-  eq(math`F_2=${N(belt.slack)};\quad a_t=${mm(c.idlerLever)};\quad a_r=${mm(c.springLever)}`);
-  eq(math`\sum M_O=F_r a_r-R_t a_t=0;\qquad R_t=2F_2\sin(\theta/2)`);
-  const [fmin,fmax]=[c.turnMin,c.turnMax].map((angle,i)=>{
-    const reaction=2*belt.slack*Math.sin(angle*Math.PI/360);
-    const force=reaction*c.idlerLever/c.springLever;
-    const tag=i===0?'min':'max';
-    eq(math`R_{t,${tag}}=2(${n(belt.slack)})\sin(${n(angle)}^\circ/2)=${N(reaction)}`);
-    eq(math`F_{${tag}}=\frac{R_{t,${tag}}a_t}{a_r}=\frac{${n(reaction)}\cdot ${n(c.idlerLever)}}{${n(c.springLever)}}=${N(force)}`);
-    return force;
-  });
-  head('Recorrido, rigidez y tensión inicial');
-  const k=(fmax-fmin)/c.travel, fi=fmin*c.preload/100;
-  eq(math`k=\frac{F_{\max}-F_{\min}}{\Delta x}=\frac{${n(fmax)}-${n(fmin)}}{${n(c.travel)}}=${dual(k,'N/mm',25.4/lbf,'lbf/in')}`);
-  eq(math`F_i=\frac{${n(c.preload)}}{100}F_{\min}=\frac{${n(c.preload)}}{100}(${n(fmin)})=${N(fi)}`);
+  check(wire&&c.preload>0&&c.preload<100&&c.springSafety>=1&&
+    c.springIndex>=6&&c.springIndex<=12&&c.hookRadius>=1,'Revisa alambre, tensión inicial y factores del tensor.');
+  check(c.wire===0,'La tabla 10-8 permite verificar la fatiga de los ganchos ASTM A228. Para A227 faltan datos de fatiga de extremos.');
+  const first=belt.states[0], last=belt.states.at(-1);
+  const fmin=first.springForce, fmax=last.springForce;
+  const k=c.springRate, fi=fmin*c.preload/100, mount=first.len*1000;
+  head('Equilibrio del brazo y tensión de montaje');
+  text('Pivote en la polea motriz. El rodillo gira libremente y se usa la misma tensión en ambos tramos del ramal flojo. El momento de la resultante de esos tramos se equilibra con el del resorte respecto al pivote.');
+  eq(math`\mathbf{R}_t=F_2(\mathbf{u}_{t,m}-\mathbf{u}_{c,t});\quad a=-\frac{\mathbf{r}_t\times(\mathbf{u}_{t,m}-\mathbf{u}_{c,t})}{\mathbf{r}_t\times\mathbf{u}_r}`);
+  eq(math`\phi_0=${n(first.phi*180/Math.PI)}^\circ;\quad\phi_1=${n(last.phi*180/Math.PI)}^\circ`);
+  eq(math`F_{r,0}=(${n(first.lever,6)})(${n(first.slack)})=${N(fmin)};\quad L_{inst,0}=${mm(mount)}`);
+  eq(math`F_{r,1}=F_{r,0}+k\Delta x=${n(fmin)}+(${n(k)})(${n(c.travel)})=${N(fmax)}`);
+  eq(math`F_i=(${n(c.preload/100)})(${n(fmin)})=${N(fi)}`);
   const xmin=(fmin-fi)/k, xmax=(fmax-fi)/k;
-  const free=c.mount-xmin;
+  const free=mount-xmin;
   eq(math`x_{\min}=\frac{${n(fmin)}-${n(fi)}}{${n(k,5)}}=${mm(xmin)}`);
   eq(math`x_{\max}=\frac{${n(fmax)}-${n(fi)}}{${n(k,5)}}=${mm(xmax)}`);
-  eq(math`L_0=L_{\mathrm{inst,\min}}-x_{\min}=${n(c.mount)}-${n(xmin)}=${mm(free)}`);
+  eq(math`L_0=L_{\mathrm{inst,\min}}-x_{\min}=${n(mount)}-${n(xmin)}=${mm(free)}`);
   check(free>0,'La distancia instalada no deja longitud libre positiva.');
   text('Fᵢ representa la tensión inicial de fabricación. F mínima es la carga instalada. El modelo usa la curva F = Fᵢ + kx después de abrir las espiras.');
 
   head('Material, esfuerzos e iteraciones');
-  text(wire.name+' · tablas 10-4 y 10-5. Se reutiliza la rigidez de la libreta (pp. 49–50), Wahl y la resistencia del alambre. Se verifica la fatiga del cuerpo con Goodman en cortante y se separan las comprobaciones estáticas de los ganchos. Para los extremos de tensión se complementan los apuntes con el modelo de ganchos de Shigley, capítulo 10.');
+  text(wire.name+' · tablas 10-4 y 10-5. Se reutiliza la rigidez de la libreta (pp. 49–50), Wahl y la resistencia del alambre. Se verifica la fatiga del cuerpo con Goodman en cortante y se verifican los ganchos en estática y fatiga. Para los extremos de tensión se complementan los apuntes con el modelo de ganchos de Shigley, capítulo 10.');
   const C=c.springIndex;
   const kw=(4*C-1)/(4*C-4)+.615/C;
   const Ci=2*c.hookRadius;
@@ -53,20 +45,30 @@ function springDesign(c,belt,kd,ke,add,check){
   eq(math`C_1=C_2=2r_g/d=${n(Ci)};\quad K_A=${n(ka,5)};\quad K_B=${n(kb,5)}`);
   eq(math`F_a=\frac{${n(fmax)}-${n(fmin)}}2=${N(fa)};\quad F_m=\frac{${n(fmax)}+${n(fmin)}}2=${N(fm)}`);
   eq(math`S_{se}=310(${n(kd)})(${n(ke)})=${MPa(endurance)}`);
+  text('Fatiga de ganchos: tabla 10-8 de Shigley para A228, 10 millones de ciclos, ambiente y sin granallado. Se convierte la resistencia de ciclo pulsante a la ordenada de Gerber.');
+  function hookFatigue(sut, factor, repeatedFraction, ultimateFraction){
+    const ultimate=ultimateFraction*sut;
+    const half=repeatedFraction*sut/2;
+    const intercept=half/(1-(half/ultimate)**2);
+    const linear=factor*fa/intercept, quadratic=(factor*fm/ultimate)**2;
+    return {intercept,ultimate, coefficient:(linear+Math.hypot(linear,2*Math.sqrt(quadratic)))/2};
+  }
   function sizing(d){
     const sut=wire.A/d**wire.m;
+    const hooks=[hookFatigue(sut,hookBend,.45,1),hookFatigue(sut,hookShear,.28,.577)];
     const required=[
       Math.sqrt(c.springSafety*body*fmax/(wire.shear*sut)),
       Math.sqrt(c.springSafety*hookBend*fmax/(wire.sy*sut)),
       Math.sqrt(c.springSafety*hookShear*fmax/(wire.shear*sut)),
-      Math.sqrt(c.springSafety*body*(fa/endurance+fm/(.577*sut)))
+      Math.sqrt(c.springSafety*body*(fa/endurance+fm/(.577*sut))),
+      ...hooks.map(h=>Math.sqrt(c.springSafety*h.coefficient))
     ];
-    return {sut,required};
+    return {sut,required,hooks};
   }
   let d=Math.min(wire.max,Math.max(wire.min,4)), converged=false;
   for(let i=1;i<=100;i++){
     add('iteration','Iteración '+i+' · diámetro del alambre');
-    const {sut,required}=sizing(d);
+    const {sut,required,hooks}=sizing(d);
     const next=Math.max(wire.min,...required);
     const error=100*Math.abs(next-d)/next;
     eq(math`d=${mm(d)};\quad S_{ut}=\frac{${n(wire.A)}}{(${n(d,6)})^{${n(wire.m)}}}=${MPa(sut)}`);
@@ -74,6 +76,7 @@ function springDesign(c,belt,kd,ke,add,check){
     eq(math`d_{\mathrm{gancho,A}}=\sqrt{\frac{${n(c.springSafety)}(${n(hookBend,5)})(${n(fmax)})}{${n(wire.sy)}(${n(sut)})}}=${mm(required[1])}`);
     eq(math`d_{\mathrm{gancho,B}}=\sqrt{\frac{${n(c.springSafety)}(${n(hookShear,5)})(${n(fmax)})}{${n(wire.shear,6)}(${n(sut)})}}=${mm(required[2])}`);
     eq(math`d_{\mathrm{fat}}=\sqrt{${n(c.springSafety)}(${n(body,5)})\left(\frac{${n(fa)}}{${n(endurance)}}+\frac{${n(fm)}}{0.577(${n(sut)})}\right)}=${mm(required[3])}`);
+    eq(math`d_{\mathrm{fat,A}}=\sqrt{${n(c.springSafety)}(${n(hooks[0].coefficient)})}=${mm(required[4])};\quad d_{\mathrm{fat,B}}=\sqrt{${n(c.springSafety)}(${n(hooks[1].coefficient)})}=${mm(required[5])}`);
     eq(math`d_{\mathrm{nuevo}}=\max(${[wire.min,...required].map(v=>n(v,5)).join(',')})=${mm(next)}`);
     eq(math`\varepsilon=100\frac{|${n(next,6)}-${n(d,6)}|}{${n(next,6)}}=${n(error,5)}\,\%`);
     check(next<=wire.max,'El diámetro requerido supera el rango del alambre seleccionado en la tabla 10-4.');
@@ -85,7 +88,7 @@ function springDesign(c,belt,kd,ke,add,check){
   let selected=Math.ceil(d*2)/2;
   while(selected<=wire.max && Math.max(...sizing(selected).required)>selected) selected+=.5;
   check(selected<=wire.max,'El diámetro redondeado supera el rango de la tabla 10-4.');
-  const {sut}=sizing(selected), D=C*selected;
+  const {sut,hooks}=sizing(selected), D=C*selected;
   const G=1000*wire.G[selected/25.4<=.032?0:selected/25.4<=.063?1:selected/25.4<=.125?2:3];
   const active=G*selected**4/(8*D**3*k);
   const initialStress=8*C*fi/(Math.PI*selected**2);
@@ -102,6 +105,10 @@ function springDesign(c,belt,kd,ke,add,check){
   const envelope=active*selected+4*c.hookRadius*selected;
   eq(math`L_{est}=N_a d+4r_g=${mm(envelope)};\quad L_{0}=${mm(free)}`);
   check(envelope<=free,'La estimación de longitud del cuerpo y los dos ganchos excede la longitud libre.');
-  note('La longitud de montaje de 190 mm es una propuesta del equipo para el caso base. Confirma con el fabricante las espiras efectivas, la longitud de los ganchos, la tensión inicial y la resistencia a fatiga de los extremos para el ciclo real. El equilibrio del tensor es local: no se actualiza la orientación de los tramos de la banda en el cálculo de la flecha.');
-  return {fmin,fmax,k,fi,selected,D,active,free,nf};
+  eq(math`S_e=\frac{S_r/2}{1-(S_r/2S_u)^2};\quad S_{r,A}=0.45S_{ut};\quad S_{r,B}=0.28S_{ut}`);
+  eq(math`\frac{n\sigma_a}{S_e}+\left(\frac{n\sigma_m}{S_u}\right)^2=1`);
+  eq(math`S_{e,A}=${MPa(hooks[0].intercept)};\quad S_{e,B}=${MPa(hooks[1].intercept)}`);
+  eq(math`n_{fat,A}=\frac{${n(selected**2)}}{${n(hooks[0].coefficient,5)}}=${n(selected**2/hooks[0].coefficient,4)};\quad n_{fat,B}=\frac{${n(selected**2)}}{${n(hooks[1].coefficient,5)}}=${n(selected**2/hooks[1].coefficient,4)}`);
+  note('Se debe confirmar en el montaje real el radio del rodillo, la posición de los anclajes y el ciclo de carga. La comprobación de fatiga corresponde a las condiciones de la tabla 10-8.');
+  return {fmin,fmax,k,fi,selected,D,active,free,nf,hookFat:hooks.map(h=>selected**2/h.coefficient)};
 }

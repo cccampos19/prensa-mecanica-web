@@ -166,13 +166,29 @@ function finishDesign(c, power, belt, add, check) {
     return {r1,r4,m2,m3};
   });
   const resultant=(key)=>Math.hypot(...planes.map(plane=>plane[key]));
-  const loads=['r1','r4'].map(resultant), moments=['m2','m3'].map(resultant);
+  const envelope=belt.states.map(state=>{
+    const pair=[[-wt,state.fy],[-wr,state.fz]].map(([g,b])=>{
+      const r4=-(g*x2+b*x3)/span, r1=-g-b-r4;
+      return [r1,r4,r1*x2/1000,(r1*x3+g*(x3-x2))/1000];
+    });
+    return {angle:state.phi*180/Math.PI,values:pair[0].map((v,i)=>Math.hypot(v,pair[1][i]))};
+  });
+  const critical=[0,1,2,3].map(i=>envelope.reduce((a,b)=>b.values[i]>a.values[i]?b:a));
+  const loads=critical.slice(0,2).map((s,i)=>s.values[i]);
+  const moments=critical.slice(2).map((s,i)=>s.values[i+2]);
   heading('Resultantes y torsión');
   for(const [key,label,formatter] of [['r1','F_{r1}',force],['r4','F_{r4}',force],['m2','M_2',moment],['m3','M_3',moment]]){
     eq(math`${label}=\sqrt{(${n(planes[0][key])})^2+(${n(planes[1][key])})^2}=${formatter(resultant(key))}`);
   }
   eq(math`T_{2-3}=T_e=${moment(power.shaftTorque)}`);
   text('El momento por plano es lineal entre puntos de carga. El torque se aplica en el tramo entre polea y piñón.');
+
+  heading('Envolvente con el tensor');
+  text('Se repite el equilibrio anterior en 101 posiciones. La selección de rodamientos y el dimensionamiento usan los máximos de reacción y momento de cada sección.');
+  critical.forEach((state,i)=>{
+    const label=['F_{r1}','F_{r4}','M_2','M_3'][i];
+    eq(math`${label}_{,\max}=${i<2?force(state.values[i]):moment(state.values[i])};\quad \phi=${n(state.angle)}^\circ`);
+  });
 
   section('Dimensionamiento de la flecha');
   text('Apuntes, pp. 9–22. Flexión alternante, torsión media y criterio elíptico de Hencky–Marin. El entalle se aplica una vez al esfuerzo.');
