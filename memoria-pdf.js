@@ -65,10 +65,10 @@ async function equationImage(tex, maxWidth, maxHeight) {
   }
 }
 
-async function buildMemoryPdf(entries,format,onProgress) {
+async function buildMemoryPdf(entries,format,onProgress,subject='Prensa mecánica') {
   await getPdfTools();
   const pdf=new window.jspdf.jsPDF({orientation:'portrait',unit:'pt',format:'a4',compress:true});
-  pdf.setProperties({title:'Memoria de cálculo de la prensa mecánica',subject:'Sustituciones, iteraciones, decisiones y diagramas',language:'es'});
+  pdf.setProperties({title:'Memoria de cálculo · '+subject,subject:'Sustituciones, iteraciones, decisiones y diagramas',language:'es'});
   const pageWidth=pdf.internal.pageSize.getWidth(), pageHeight=pdf.internal.pageSize.getHeight();
   const margin=46, width=pageWidth-2*margin, bottom=pageHeight-53;
   let y=54;
@@ -174,7 +174,7 @@ async function buildMemoryPdf(entries,format,onProgress) {
   }
 
   paragraph('Memoria de cálculo',{bold:true,size:27,gap:4});
-  paragraph('Prensa mecánica',{bold:true,size:18,gap:15,color:'#21594c'});
+  paragraph(subject,{bold:true,size:18,gap:15,color:'#21594c'});
   for(const [index,{type,value}] of entries.entries()){
     if(index%15===0) onProgress(index,entries.length);
     if(type==='eq'){
@@ -204,7 +204,7 @@ async function buildMemoryPdf(entries,format,onProgress) {
     pdf.setFontSize(8);
     pdf.setTextColor('#4e655b');
     pdf.setFont('helvetica','normal');
-    pdf.text('Prensa mecánica',margin,pageHeight-30);
+    pdf.text(subject,margin,pageHeight-30);
     pdf.text(i+' / '+pages,pageWidth-margin,pageHeight-30,{align:'right'});
   }
   return pdf.output('blob');

@@ -21,30 +21,35 @@ const dual = (value, si, factor, english) =>
 const math = String.raw;
 const plainNumberNotation = value => value.replace(/\\times 10\^\{(-?\d+)\}/g, 'e$1');
 
-function calculate(c) {
+function createCalculationTrace() {
   const entries = [];
+  const decisions = [];
   const add = (type, value) => entries.push({type, value});
-  const eq = value => add('eq', value);
   const check = (condition, message, stage) => {
     if (!condition) throw Object.assign(new Error(message), {stage});
   };
+  function decision(stage, title, unit, summary = '') {
+    const group = {stage, title, unit, summary:plainNumberNotation(summary), trials:[]};
+    decisions.push(group);
+    return group;
+  }
+  function trial(group, value, status, reason) {
+    const candidate = {measure:plainNumberNotation(number(value))+' '+group.unit, status, reason:plainNumberNotation(reason)};
+    group.trials.push(candidate);
+    return candidate;
+  }
+  return {entries, decisions, add, check, decision, trial};
+}
+
+function calculate(c) {
+  const {entries, decisions, add, check, decision, trial} = createCalculationTrace();
+  const eq = value => add('eq', value);
   const n = number;
   const kw = watts => dual(watts / 1000, 'kW', 1000 / hp, 'hp');
   const torque = value => dual(value, 'N\\,m', 1 / (lbf * inch * 12), 'lbf\\,ft');
   const mm = meters => dual(meters * 1000, 'mm', 1 / (1000 * inch), 'in');
   const force = value => dual(value, 'N', 1 / lbf, 'lbf');
   const iterations = [];
-  const decisions = [];
-  function decision(stage, title, unit, summary) {
-    const group = {stage, title, unit, summary:plainNumberNotation(summary), trials:[]};
-    decisions.push(group);
-    return group;
-  }
-  function trial(group, value, status, reason) {
-    const candidate = {measure:plainNumberNotation(n(value))+' '+group.unit, status, reason:plainNumberNotation(reason)};
-    group.trials.push(candidate);
-    return candidate;
-  }
   const decisionLog = {decision, trial};
   let power;
   let belt;

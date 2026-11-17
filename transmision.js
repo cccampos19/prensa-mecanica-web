@@ -14,21 +14,12 @@ const shaftLoadFactors = [
   {label:'Torsión · 0.59',value:.59}
 ];
 
-function finishDesign(c, power, belt, entries, check, {decision,trial}) {
-  const add = (type,value) => entries.push({type,value});
-  const n = number;
-  const eq = value => add('eq', value);
-  const heading = value => add('heading', value);
-  const text = value => add('text', value);
-  const note = value => add('note', value);
-  const section = value => add('section', value);
-  const mm = value => dual(value, 'mm', 1/25.4, 'in');
-  const stress = value => dual(value, 'MPa', 1/6.894757293, 'kpsi');
-  const force = value => dual(value, 'N', 1/lbf, 'lbf');
-  const moment = value => dual(value, 'N\\,m', 1/(lbf*12*inch), 'lbf\\,ft');
-  const kip = value => dual(value, 'kN', 1000/lbf, 'lbf');
-  const rad = deg => deg*Math.PI/180;
-  const zero = value => Math.abs(value)<1e-9 ? 0 : value;
+function transmissionMath({add,check}) {
+  const n=number;
+  const eq=value=>add('eq',value);
+  const text=value=>add('text',value);
+  const mm=value=>dual(value,'mm',1/25.4,'in');
+  const stress=value=>dual(value,'MPa',1/6.894757293,'kpsi');
 
   function interpolate(rows, x, label) {
     const i = rows.findIndex(([value]) => value >= x);
@@ -100,8 +91,37 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
     check(false, 'La iteración de ' + label + ' no convergió en 100 pasos.');
   }
 
-  section('Engranes rectos');
+  return {interpolate,useSteel,sizeFactor,notch,iterate,eq,text,mm,stress};
+}
+
+function shaftStress(c,shaft,{d,M,T,kd,ke},{sizeFactor,notch,eq,stress},show=true){
+  const n=number;
+  const r=c.fillet*d;
+  const kb=sizeFactor(d);
+  const kf=notch(shaft.sut,r,c.ktFlex,false,'b',show);
+  const kfs=notch(shaft.sut,r,c.ktTors,true,'s',show);
+  const se=.5*shaft.sut*shaft.ka*kb*c.kc*kd*ke;
+  if(show){
+    eq(d<=51 ? math`k_b=(${n(d,5)}/7.62)^{-0.107}=${n(kb,5)}` : math`k_b=1.51(${n(d,5)})^{-0.157}=${n(kb,5)}`);
+    eq(math`S_e=k_ak_bk_ck_dk_eS'_e=(${[shaft.ka,kb,c.kc,kd,ke,.5*shaft.sut].map(v=>n(v,5)).join(')(')})=${stress(se)}`);
+  }
+  const a=kf*32*M/(Math.PI*d**3), m=Math.sqrt(3)*kfs*16*T/(Math.PI*d**3);
+  const nf=1/((a/se)**2+(m/shaft.sut)**2), ns=shaft.sy/Math.hypot(a,m);
+  return {d,M,T,se,kf,kfs,a,m,nf,ns};
+}
+
+function sizeSpurGears(c,{torque,rpm},ctx,sizing=transmissionMath(ctx)){
+  const {add,check,decision,trial}=ctx;
+  const {interpolate,useSteel,sizeFactor,notch,iterate,eq,text,mm,stress}=sizing;
+  const n=number;
+  const heading=value=>add('heading',value);
+  const note=value=>add('note',value);
+  const force=value=>dual(value,'N',1/lbf,'lbf');
+  const rad=deg=>deg*Math.PI/180;
+
   text('Métodos de la libreta, pp. 28–39. Lewis para flexión del diente y verificación de fatiga pulsante con los factores del ejemplo.');
+  check(Number.isFinite(torque)&&torque>0&&Number.isFinite(rpm)&&rpm>0,'Ingresa torque y velocidad positivos para el piñón.');
+  check([c.np,c.ng].every(z=>Number.isSafeInteger(z)&&z>0),'Ingresa cantidades enteras positivas de dientes.');
   check(Number.isFinite(c.pd)&&c.pd>0,'El paso diametral propuesto debe ser positivo.');
   check(Number.isFinite(c.faceStart)&&c.faceStart>=0,'El ancho inicial de cara debe ser cero o positivo.');
   check(c.phi>0&&c.phi<90&&c.yp>0&&c.yg>0&&c.ktGear>=1&&c.gearFat>=1&&c.gearStatic>=1, 'Revisa el ángulo, los factores de Lewis, Kt y las seguridades de engranes.');
@@ -114,21 +134,19 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
   }
   const diametral=c.pd, module=25.4/diametral;
   const pinion=c.np*module, gearDiameter=c.ng*module;
+  const centerDistance=(pinion+gearDiameter)/2;
   const pitch=Math.PI/diametral, minFace=3*pitch, maxFace=5*pitch;
-  const wt=2000*power.shaftTorque/pinion, wr=wt*Math.tan(rad(c.phi));
-  const speed=Math.PI*(pinion/25.4)*power.shaftRpm/12;
+  const wt=2000*torque/pinion, wr=wt*Math.tan(rad(c.phi));
+  const speed=Math.PI*(pinion/25.4)*rpm/12;
   const kv=1200/(1200+speed);
   text('Se mantienen el acero, el paso diametral y los números de dientes propuestos. La dimensión que se busca es el ancho de cara.');
   eq(math`m=\frac{25.4}{P_d}=\frac{25.4}{${n(diametral,5)}}=${mm(module)};\quad p=\pi/P_d=${mm(25.4*pitch)}`);
   eq(math`d_p=N_p m=${c.np}(${n(module,5)})=${mm(pinion)};\quad d_g=N_g m=${c.ng}(${n(module,5)})=${mm(gearDiameter)}`);
-  if(Math.abs(pinion-160)>1e-9||Math.abs(gearDiameter-640)>1e-9){
-    note('La geometría propuesta da diámetros primitivos distintos de los 160 y 640 mm del plano de la tarea. Esta corrida dimensiona la nueva geometría.');
-  }
   eq(math`a=1/P_d=${mm(25.4/diametral)};\quad b=1.25/P_d=${mm(1.25*25.4/diametral)}`);
-  eq(math`C=\frac{${n(pinion)}+${n(gearDiameter)}}{2}=${mm((pinion+gearDiameter)/2)}`);
-  eq(math`W_t=2T_e/d_p=\frac{2(${n(power.shaftTorque)})}{${n(pinion/1000,6)}}=${force(wt)}`);
+  eq(math`C=\frac{${n(pinion)}+${n(gearDiameter)}}{2}=${mm(centerDistance)}`);
+  eq(math`W_t=2T_e/d_p=\frac{2(${n(torque)})}{${n(pinion/1000,6)}}=${force(wt)}`);
   eq(math`W_r=W_t\tan\phi=${n(wt)}\tan(${n(c.phi)}^\circ)=${force(wr)}`);
-  eq(math`v=\frac{\pi(${n(pinion/25.4)})(${n(power.shaftRpm)})}{12}=${dual(speed,'ft/min',.3048/60,'m/s')}`);
+  eq(math`v=\frac{\pi(${n(pinion/25.4)})(${n(rpm)})}{12}=${dual(speed,'ft/min',.3048/60,'m/s')}`);
   eq(math`K_v=\frac{1200}{1200+v}=\frac{1200}{1200+${n(speed)}}=${n(kv,5)}`);
   eq(math`3p=${mm(minFace*25.4)};\quad 5p=${mm(maxFace*25.4)};\quad k_d=${n(kd)};\quad k_e=${n(ke)}`);
   text('Se sigue la aproximación pulsante de Goodman del ejemplo de clase. La resistencia base pulsante es 1.33 veces 0.5 Sut, corregida con los factores de Marin. El entalle se aplica una vez en la comprobación.');
@@ -195,6 +213,34 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
     reason+(fatigueOk&&staticOk?'El ancho calculado cumple en el piñón y la rueda.':'El ancho evaluado queda por debajo de uno o ambos requisitos.'));
   check(fatigueOk&&staticOk,gear.label+' con paso diametral '+n(diametral,5)+' no alcanza las seguridades con el ancho evaluado de '+n(faceMm,2)+' mm. El límite de 5 pasos circulares es '+n(maxFace*25.4,2)+' mm.');
 
+  return {module,diametral,pinion,gearDiameter,centerDistance,wt,wr,faceMm,kd,ke,gearFatigue,gearStatic};
+}
+
+function finishDesign(c, power, belt, entries, check, {decision,trial}) {
+  const add = (type,value) => entries.push({type,value});
+  const n = number;
+  const eq = value => add('eq', value);
+  const heading = value => add('heading', value);
+  const text = value => add('text', value);
+  const note = value => add('note', value);
+  const section = value => add('section', value);
+  const mm = value => dual(value, 'mm', 1/25.4, 'in');
+  const stress = value => dual(value, 'MPa', 1/6.894757293, 'kpsi');
+  const force = value => dual(value, 'N', 1/lbf, 'lbf');
+  const moment = value => dual(value, 'N\\,m', 1/(lbf*12*inch), 'lbf\\,ft');
+  const kip = value => dual(value, 'kN', 1000/lbf, 'lbf');
+  const zero = value => Math.abs(value)<1e-9 ? 0 : value;
+
+  const ctx={add,check,decision,trial};
+  const sizing=transmissionMath(ctx);
+  const {useSteel,iterate}=sizing;
+  section('Engranes rectos');
+  const {module,diametral,pinion,gearDiameter,faceMm,wt,wr,kd,ke,gearFatigue,gearStatic}=
+    sizeSpurGears(c,{torque:power.shaftTorque,rpm:power.shaftRpm},ctx,sizing);
+  if(Math.abs(pinion-160)>1e-9||Math.abs(gearDiameter-640)>1e-9){
+    note('La geometría propuesta da diámetros primitivos distintos de los 160 y 640 mm del plano de la tarea. Esta corrida dimensiona la nueva geometría.');
+  }
+
   section('Equilibrio de la flecha');
   text('Apoyos 1 y 4, piñón en 2 y polea en 3. Se conserva el convenio del proyecto para las componentes del piñón y la banda. Apuntes, p. 14.');
   const {x2,x3,span}=c;
@@ -250,19 +296,9 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
   const sectionRatios=[1,1.2];
   function shaftSection(shaft,base,i,show){
     const d=sectionRatios[i]*base;
-    const r=c.fillet*d, M=moments[i]*1000, T=power.shaftTorque*1000;
-    if(show) eq(math`d_{${i+2}}=${n(sectionRatios[i])}(${n(base,5)})=${mm(d)};\quad r=${n(c.fillet)}(${n(d,5)})=${mm(r)}`);
-    const kb=sizeFactor(d);
-    const kf=notch(shaft.sut,r,c.ktFlex,false,'b',show);
-    const kfs=notch(shaft.sut,r,c.ktTors,true,'s',show);
-    const se=.5*shaft.sut*shaft.ka*kb*c.kc*kd*ke;
-    if(show){
-      eq(d<=51 ? math`k_b=(${n(d,5)}/7.62)^{-0.107}=${n(kb,5)}` : math`k_b=1.51(${n(d,5)})^{-0.157}=${n(kb,5)}`);
-      eq(math`S_e=k_ak_bk_ck_dk_eS'_e=(${[shaft.ka,kb,c.kc,kd,ke,.5*shaft.sut].map(v=>n(v,5)).join(')(')})=${stress(se)}`);
-    }
-    const a=kf*32*M/(Math.PI*d**3), m=Math.sqrt(3)*kfs*16*T/(Math.PI*d**3);
-    const nf=1/((a/se)**2+(m/shaft.sut)**2), ns=shaft.sy/Math.hypot(a,m);
-    return {d,M,T,se,kf,kfs,a,m,nf,ns};
+    const M=moments[i]*1000, T=power.shaftTorque*1000;
+    if(show) eq(math`d_{${i+2}}=${n(sectionRatios[i])}(${n(base,5)})=${mm(d)};\quad r=${n(c.fillet)}(${n(d,5)})=${mm(c.fillet*d)}`);
+    return shaftStress(c,shaft,{d,M,T,kd,ke},sizing,show);
   }
   check(c.shaftStart>=2.79&&1.2*c.shaftStart<=254,'El diámetro inicial debe quedar en el intervalo de la tabla de tamaño.');
   function solveDiameter(shaft){
@@ -426,4 +462,118 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
     note('El montaje directo presenta interferencia. Queda por definir en el plano la interfaz que libre el filete de '+n(fillet)+' mm y apoye en el rodamiento con el radio límite de '+n(rmax)+' mm de la tabla 11-2.');
   }
   return {module,diametral,pinion,gear:gearDiameter,faceMm,wt,wr,loads,moments,continuous,diameter,planes,kd,ke,gearFatigue,gearStatic,shaftFatigue,shaftStatic,bearingLife,bearingMountPending,stockReview,shaftSteelIndex,shaftTrials};
+}
+
+function solveComponentGears(c,ctx){
+  const {add}=ctx;
+  const result=sizeSpurGears(c,{torque:c.torque,rpm:c.rpm},ctx);
+  const ratio=c.ng/c.np;
+  const outputSpeed=c.rpm/ratio;
+  const bigger=Math.max(result.pinion,result.gearDiameter);
+  const r1=45*result.pinion/bigger, r2=45*result.gearDiameter/bigger;
+  add('heading','Relación y velocidad de salida');
+  add('eq',math`i=\frac{N_g}{N_p}=\frac{${c.ng}}{${c.np}}=${number(ratio,4)};\quad n_g=\frac{n_p}{i}=\frac{${number(c.rpm)}}{${number(ratio,4)}}=${display(outputSpeed,'rpm')}`);
+  add('diagram',{
+    title:'Engrane recto exterior',
+    caption:'Vista esquemática de los círculos primitivos. Las fuerzas tangencial y radial actúan en el punto de contacto.',
+    marks:[
+      ['circle',155-r1,60,r1], ['circle',155+r2,60,r2],
+      ['line',155,60,155,111], ['line',155,111,151,105], ['line',155,111,159,105],
+      ['line',155,60,106,60], ['line',106,60,112,56], ['line',106,60,112,64],
+      ['label',168,111,'Wt'], ['label',99,73,'Wr'],
+      ['label',67,15,'Piñón · '+c.np+' dientes'], ['label',199,7,'Rueda · '+c.ng+' dientes'],
+      ['label',329,84,'Cara '+number(result.faceMm,2)+' mm'],
+      ['label',329,50,'Entre centros '+number(result.centerDistance,2)+' mm']
+    ]
+  });
+  return {metrics:[
+    ['Ancho de cara',result.faceMm,'mm',3],
+    ['Módulo',result.module,'mm',3],
+    ['Distancia entre centros',result.centerDistance,'mm',3],
+    ['Velocidad de la rueda',outputSpeed,'rpm',2],
+    ['Fuerza tangencial',result.wt,'N',2],
+    ['Fuerza radial',result.wr,'N',2],
+    ['Factor mínimo a fatiga',Math.min(...result.gearFatigue),'',4],
+    ['Factor estático mínimo',Math.min(...result.gearStatic),'',4]
+  ]};
+}
+
+function solveComponentShaft(c,ctx){
+  const {add,check,decision,trial}=ctx;
+  const sizing=transmissionMath(ctx);
+  const {eq,text,mm,stress,useSteel,interpolate,iterate}=sizing;
+  const n=number;
+  const dMin=2.79, dMax=254;
+  check(Number.isFinite(c.moment)&&c.moment>=0&&Number.isFinite(c.torque)&&c.torque>=0&&(c.moment>0||c.torque>0),
+    'Ingresa magnitudes de momento y torque no negativas, con al menos una mayor que cero.');
+  check(Number.isFinite(c.shaftStart)&&c.shaftStart>=dMin&&c.shaftStart<=dMax,
+    'El diámetro inicial debe estar en el intervalo de 2.79 a 254 mm del factor de tamaño.');
+  check(Number.isFinite(c.fillet)&&c.fillet>0&&[c.ktFlex,c.ktTors,c.shaftFat,c.shaftStatic].every(v=>Number.isFinite(v)&&v>=1),
+    'Revisa el filete, los concentradores y los objetivos de seguridad. Los concentradores y objetivos deben ser al menos 1.');
+  check(shaftLoadFactors.some(({value})=>value===c.kc),'Selecciona un factor de carga de la tabla de clase.');
+  const shaft=useSteel(c.shaftSteel,c.shaftFinish);
+  const kd=interpolate(referenceTables[7].rows,c.temperature,'Temperatura');
+  const ke=interpolate(referenceTables[6].rows,c.reliability,'Confiabilidad');
+  const M=c.moment*1000, T=c.torque*1000;
+  const elasticBend=32*c.ktFlex*M/Math.PI, elasticShear=16*c.ktTors*T/Math.PI;
+  const elasticEquivalent=Math.hypot(elasticBend,Math.sqrt(3)*elasticShear);
+  const staticDiameter=Math.cbrt(c.shaftStatic*elasticEquivalent/shaft.sy);
+
+  add('heading','Cargas de la sección crítica');
+  text('Se comprueba una sección circular maciza con flexión completamente alternante y torsión constante. El índice de Hencky–Marin sigue la definición de la libreta. Para la fluencia se usan los concentradores elásticos propuestos y el esfuerzo equivalente de von Mises.');
+  eq(math`M_a=${n(c.moment)}\,\mathrm{N\,m}=${display(M,'N\\,mm')};\quad T_m=${n(c.torque)}\,\mathrm{N\,m}=${display(T,'N\\,mm')}`);
+  eq(math`S'_e=0.5(${n(shaft.sut)})=${stress(.5*shaft.sut)};\quad k_c=${n(c.kc)};\quad k_d=${n(kd)};\quad k_e=${n(ke)}`);
+  text('El radio se calcula a partir de la relación r/d ingresada. Las figuras 6-20 y 6-21 usan la ordenada de r = 0.16 in para radios mayores.');
+  add('heading','Diámetro por fluencia');
+  eq(math`d_{\mathrm{est}}=\left[\frac{n_{\mathrm{est,obj}}}{S_y}\sqrt{\left(\frac{32K_t M_a}{\pi}\right)^2+3\left(\frac{16K_{ts}T_m}{\pi}\right)^2}\right]^{1/3}`);
+  eq(math`d_{\mathrm{est}}=\left[\frac{${n(c.shaftStatic)}}{${n(shaft.sy)}}\sqrt{\left(\frac{32(${n(c.ktFlex)})(${n(M)})}{\pi}\right)^2+3\left(\frac{16(${n(c.ktTors)})(${n(T)})}{\pi}\right)^2}\right]^{1/3}=${mm(staticDiameter)}`);
+
+  add('heading','Iteración por fatiga y selección del diámetro continuo');
+  const log=decision(5,'Diámetro de la sección crítica','mm',shaft.label+'. El diámetro continuo se verifica con las cargas dadas y el intervalo del factor de tamaño.');
+  const diameter=iterate(c.shaftStart,'diámetro de la flecha (mm)',d=>{
+    eq(math`d=${mm(d)};\quad r=(${n(c.fillet)})(${n(d,5)})=${mm(c.fillet*d)}`);
+    const {kf,kfs,se}=shaftStress(c,shaft,{d,M,T,kd,ke},sizing);
+    const fatigueDiameter=Math.cbrt(32*Math.sqrt(c.shaftFat)/Math.PI*Math.hypot(kf*M/se,Math.sqrt(.75)*kfs*T/shaft.sut));
+    eq(math`d_{\mathrm{fat}}=\left[\frac{32\sqrt{n_{\mathrm{fat,obj}}}}{\pi}\sqrt{\left(\frac{K_f M_a}{S_e}\right)^2+\tfrac34\left(\frac{K_{fs}T_m}{S_{ut}}\right)^2}\right]^{1/3}`);
+    eq(math`d_{\mathrm{fat}}=\left[\frac{32\sqrt{${n(c.shaftFat)}}}{\pi}\sqrt{\left(\frac{${n(kf,5)}(${n(M)})}{${n(se,4)}}\right)^2+\tfrac34\left(\frac{${n(kfs,5)}(${n(T)})}{${n(shaft.sut)}}\right)^2}\right]^{1/3}=${mm(fatigueDiameter)}`);
+    const next=Math.max(dMin,staticDiameter,fatigueDiameter);
+    eq(math`d_{\mathrm{req}}=\max(${n(dMin)},${n(staticDiameter,5)},${n(fatigueDiameter,5)})=${mm(next)}`);
+    if(next>dMax) text('Se verifica el extremo superior del intervalo del factor de tamaño.');
+    return Math.min(dMax,next);
+  },false,0.000001);
+
+  add('heading','Comprobación de fatiga y fluencia');
+  const {a,m,nf,se,kf,kfs}=shaftStress(c,shaft,{d:diameter,M,T,kd,ke},sizing);
+  const sigma=elasticBend/diameter**3, tau=elasticShear/diameter**3;
+  const equivalent=Math.hypot(sigma,Math.sqrt(3)*tau);
+  const staticFactor=shaft.sy/equivalent;
+  eq(math`\sigma_a=\frac{32(${n(kf,5)})(${n(M)})}{\pi(${n(diameter,5)})^3}=${stress(a)};\quad \sigma_{m,eq}=\frac{\sqrt3 16(${n(kfs,5)})(${n(T)})}{\pi(${n(diameter,5)})^3}=${stress(m)}`);
+  eq(math`n_{\mathrm{fat}}=\frac{1}{\left(${n(a,4)}/${n(se,4)}\right)^2+\left(${n(m,4)}/${n(shaft.sut)}\right)^2}=${n(nf,5)}`);
+  eq(math`\sigma_{\mathrm{VM}}=\sqrt{(${n(sigma,4)})^2+3(${n(tau,4)})^2}=${stress(equivalent)};\quad n_{\mathrm{est}}=\frac{${n(shaft.sy)}}{${n(equivalent,4)}}=${n(staticFactor,5)}`);
+  const qualifies=nf>=c.shaftFat*(1-1e-8)&&staticFactor>=c.shaftStatic*(1-1e-8);
+  trial(log,diameter,qualifies?'calculated':'rejected',
+    'Índice de fatiga '+n(nf,4)+' frente a '+n(c.shaftFat)+' requerido. Factor de fluencia '+n(staticFactor,4)+' frente a '+n(c.shaftStatic)+' requerido.');
+  check(qualifies,'El diámetro evaluado de '+n(diameter,3)+' mm queda por debajo de los objetivos de seguridad de la sección.');
+  add('note',shaft.table==='A-20'
+    ?'La tabla A-20 indica un intervalo de 18–32 mm para sus estimaciones ASTM. La aplicación a la barra suministrada depende de su tamaño y condición.'
+    :'La tabla A-21 reporta valores medios para probetas de barras de 25.4 mm. La aplicación a la barra suministrada depende de su tamaño y condición.');
+  add('diagram',{
+    title:'Sección crítica de una flecha circular',
+    caption:'Esquema de la sección y magnitudes aplicadas. El diámetro mostrado corresponde al cálculo continuo.',
+    marks:[
+      ['circle',210,63,34], ['line',176,63,244,63],
+      ['line',176,63,181,66], ['line',176,63,181,60], ['line',244,63,239,66], ['line',244,63,239,60],
+      ['label',210,109,'d = '+n(diameter,2)+' mm'],
+      ['label',84,64,'Flexión '+n(c.moment,2)+' N·m'],
+      ['label',333,64,'Torsión '+n(c.torque,2)+' N·m'],
+      ['label',210,13,'Filete r = '+n(c.fillet*diameter,2)+' mm']
+    ]
+  });
+  return {metrics:[
+    ['Diámetro calculado',diameter,'mm',3],
+    ['Diámetro por fluencia',staticDiameter,'mm',3],
+    ['Índice de Hencky–Marin',nf,'',4],
+    ['Factor de fluencia',staticFactor,'',4],
+    ['Radio de filete',c.fillet*diameter,'mm',3]
+  ]};
 }

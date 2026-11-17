@@ -5,35 +5,45 @@ const springWires = [
   {name:'ASTM A227 · alambre estirado duro', A:1783,m:.19,min:.7,max:12.7,G:[80.7,80,79.3,78.6],sy:.60,shear:.45}
 ];
 
-function springDesign(c,belt,add,check,{decision,trial}){
+function springDesign(c,belt,add,check,decisionLog){
+  const first=belt.states[0], last=belt.states.at(-1);
+  const fmin=first.springForce, fmax=last.springForce, mount=first.len*1000;
+  add('heading','Equilibrio del brazo y tensión de montaje');
+  add('text','Pivote en la polea motriz. El rodillo gira libremente y se usa la misma tensión en ambos tramos del ramal flojo. El momento de la resultante de esos tramos se equilibra con el del resorte respecto al pivote.');
+  add('eq',math`\mathbf{R}_t=F_2(\mathbf{u}_{t,m}-\mathbf{u}_{c,t});\quad a=-\frac{\mathbf{r}_t\times(\mathbf{u}_{t,m}-\mathbf{u}_{c,t})}{\mathbf{r}_t\times\mathbf{u}_r}`);
+  add('eq',math`\phi_0=${number(first.phi*180/Math.PI)}^\circ;\quad\phi_1=${number(last.phi*180/Math.PI)}^\circ`);
+  add('eq',math`F_{r,0}=(${number(first.lever,6)})(${number(first.slack)})=${dual(fmin,'N',1/lbf,'lbf')};\quad L_{inst,0}=${dual(mount,'mm',1/25.4,'in')}`);
+  add('eq',math`F_{r,1}=F_{r,0}+k\Delta x=${number(fmin)}+(${number(c.springRate)})(${number(c.travel)})=${dual(fmax,'N',1/lbf,'lbf')}`);
+  return sizeExtensionSpring(c,{fmin,fmax,mount},{add,check,...decisionLog});
+}
+
+function sizeExtensionSpring(c,{fmin,fmax,mount},{add,check,decision,trial}){
   const n=number, eq=value=>add('eq',value), note=value=>add('note',value);
   const head=value=>add('heading',value), text=value=>add('text',value);
   const mm=v=>dual(v,'mm',1/25.4,'in');
   const N=v=>dual(v,'N',1/lbf,'lbf');
   const MPa=v=>dual(v,'MPa',1/6.894757293,'kpsi');
   const wire=springWires[c.wire];
-  check(wire&&c.preload>0&&c.preload<100&&c.springSafety>=1&&
-    c.springIndex>=6&&c.springIndex<=12&&c.hookRadius>=1,'Revisa alambre, tensión inicial y factores del tensor.');
+  check(wire,'Selecciona un alambre de las tablas 10-4 y 10-5.');
+  check([c.preload,c.springSafety,c.springIndex,c.hookRadius].every(Number.isFinite)&&
+    c.preload>0&&c.preload<100&&c.springSafety>=1&&c.springIndex>=6&&c.springIndex<=12&&c.hookRadius>=1,
+    'La tensión inicial debe quedar entre 0 y 100 %, el índice entre 6 y 12, y la seguridad estática y la relación de radio del gancho deben ser al menos 1.');
+  check([fmin,fmax,mount,c.springRate].every(Number.isFinite)&&
+    fmin>=0&&fmax>0&&fmax>=fmin&&mount>0&&c.springRate>0,
+    'La fuerza máxima debe ser positiva y alcanzar la fuerza mínima, que puede ser cero. La rigidez y la longitud instalada deben ser positivas.');
   const wireStart=c.wireStart??4;
   check(Number.isFinite(wireStart)&&wireStart>0,'El diámetro inicial del alambre debe ser positivo.');
   const wireDecision=decision(7,'Diámetro del alambre del resorte','mm',
     wire.name+' con intervalo tabulado de '+n(wire.min)+' a '+n(wire.max)+' mm. La tabla 10-4 da un intervalo de aplicación para el cálculo. La selección comercial y la resistencia cíclica quedan pendientes.');
-  const first=belt.states[0], last=belt.states.at(-1);
-  const fmin=first.springForce, fmax=last.springForce;
-  const k=c.springRate, fi=fmin*c.preload/100, mount=first.len*1000;
-  head('Equilibrio del brazo y tensión de montaje');
-  text('Pivote en la polea motriz. El rodillo gira libremente y se usa la misma tensión en ambos tramos del ramal flojo. El momento de la resultante de esos tramos se equilibra con el del resorte respecto al pivote.');
-  eq(math`\mathbf{R}_t=F_2(\mathbf{u}_{t,m}-\mathbf{u}_{c,t});\quad a=-\frac{\mathbf{r}_t\times(\mathbf{u}_{t,m}-\mathbf{u}_{c,t})}{\mathbf{r}_t\times\mathbf{u}_r}`);
-  eq(math`\phi_0=${n(first.phi*180/Math.PI)}^\circ;\quad\phi_1=${n(last.phi*180/Math.PI)}^\circ`);
-  eq(math`F_{r,0}=(${n(first.lever,6)})(${n(first.slack)})=${N(fmin)};\quad L_{inst,0}=${mm(mount)}`);
-  eq(math`F_{r,1}=F_{r,0}+k\Delta x=${n(fmin)}+(${n(k)})(${n(c.travel)})=${N(fmax)}`);
+  const k=c.springRate, fi=fmin*(c.preload/100);
+  head('Tensión inicial y longitud libre');
   eq(math`F_i=(${n(c.preload/100)})(${n(fmin)})=${N(fi)}`);
   const xmin=(fmin-fi)/k, xmax=(fmax-fi)/k;
   const free=mount-xmin;
   eq(math`x_{\min}=\frac{${n(fmin)}-${n(fi)}}{${n(k,5)}}=${mm(xmin)}`);
   eq(math`x_{\max}=\frac{${n(fmax)}-${n(fi)}}{${n(k,5)}}=${mm(xmax)}`);
   eq(math`L_0=L_{\mathrm{inst,\min}}-x_{\min}=${n(mount)}-${n(xmin)}=${mm(free)}`);
-  check(free>0,'La distancia instalada no deja longitud libre positiva.');
+  check([xmin,xmax,free].every(Number.isFinite)&&free>0,'La distancia instalada no deja longitud libre positiva.');
   text('Fᵢ representa la tensión inicial de fabricación. F mínima es la carga instalada. El modelo usa la curva F = Fᵢ + kx después de abrir las espiras.');
 
   head('Material, esfuerzos e iteraciones');
@@ -140,6 +150,6 @@ function springDesign(c,belt,add,check,{decision,trial}){
     eq(math`s_m=\frac{K_F F_m}{d^2}=\frac{(${n(factor,6)})(${n(fm)})}{${n(selected)}^2}=${MPa(factor*fm/selected**2)}`);
   }
   note('Datos faltantes: curva esfuerzo–vida o esfuerzo alternante admisible del alambre '+wire.name+' a '+n(selected)+' mm, para torsión del cuerpo, flexión de A y torsión de B, al cociente de carga R = '+n(stressRatio,3)+' y para los radios, acabado y tratamiento de los extremos propuestos. Una curva fabricante de carga–vida del resorte terminado para este intervalo de carga también permite verificar el conjunto.');
-  note('Falta fijar los ciclos objetivo del tensor y su historial de carga. Las horas L10 de rodamientos y las rpm de la flecha no determinan cuántas veces se recorre el intervalo de carga del resorte. Los límites elásticos de la tabla 10-5 y los valores estáticos del recorte 10-6 no son datos de vida a fatiga.');
-  return {name:wire.name,fmin,fmax,k,fi,selected,D,active,free,elasticFactors,stressRatio,fatigueDemand};
+  note('Para evaluar la vida a fatiga hacen falta los ciclos objetivo del resorte y su historial de carga. Las tablas 10-5 y 10-6 aportan límites elásticos y valores estáticos.');
+  return {name:wire.name,fmin,fmax,k,fi,selected,D,active,free,xmin,xmax,elasticFactors,stressRatio,fatigueDemand};
 }

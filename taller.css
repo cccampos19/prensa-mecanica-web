@@ -1,0 +1,158 @@
+:root {
+  --ink: #162b34;
+  --muted: #506570;
+  --accent: #09636a;
+  --violet: #12767d;
+  --wash: #f0f3f1;
+  --border: #d3dedc;
+  --panel: #f4f8f7;
+  --shadow: 0 2px 9px #102b390a;
+  scroll-padding-bottom: 16px;
+}
+
+.masthead {
+  color: #fff;
+  border-bottom: 3px solid #59aaa2;
+  background:
+    linear-gradient(110deg, #102b39 12%, #12404ac7 100%),
+    repeating-linear-gradient(0deg, #709ca83a 0 1px, transparent 1px 18px),
+    repeating-linear-gradient(90deg, #709ca83a 0 1px, transparent 1px 18px),
+    #12404a;
+}
+.masthead-inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  max-width: 1450px;
+  padding: 24px 32px 29px;
+  margin: 0 auto;
+}
+.masthead h1 { font-size: clamp(36px, 5vw, 61px); margin: 7px 0 10px }
+.masthead p:not(.project-name) { margin: 0; color: #daeae9 }
+.masthead .project-name { color: #a9d9d6 }
+.original-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  color: #eefbf9;
+  text-decoration: none;
+  border: 1px solid #6e9b9f;
+  border-radius: 5px;
+  font-size: .87rem;
+}
+.original-link:hover { background: #ffffff15 }
+.masthead :focus-visible { outline-color: #a9d9d6 }
+
+.workbench {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 22px;
+  max-width: 1450px;
+  margin: 0 auto;
+  padding: 23px 32px 52px;
+  align-items: start;
+}
+.module-menu,.input-panel,.result-panel,.module-header {
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+.module-menu { padding: 14px; position: sticky; top: 16px }
+.module-menu h2 {
+  margin: 2px 5px 10px;
+  color: var(--muted);
+  font: 600 .77rem/1.3 var(--mono);
+  text-transform: uppercase;
+  letter-spacing: .035em;
+}
+#modules { display: grid; gap: 4px }
+.module-link,.catalog-link {
+  display: flex;
+  align-items: center;
+  min-height: 41px;
+  border-radius: 5px;
+  padding: 7px 10px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: .89rem;
+  font-weight: 700;
+}
+.module-link:hover,.catalog-link:hover { background: #edf6f4 }
+.module-link[aria-current],.catalog-link[aria-current] { color: #fff; background: #185961 }
+.catalog-link { border-top: 1px solid var(--border); margin-top: 12px; border-radius: 0 0 4px 4px; color: var(--accent) }
+
+.module-header { padding: 22px 25px; border-left: 4px solid #279892; margin-bottom: 15px }
+.module-header h2 { margin: 6px 0 8px }
+.module-header p { margin: 0; max-width: 72ch; color: var(--muted) }
+#module-type { color: var(--accent); font: 600 .76rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: .04em }
+.module-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(285px, .85fr); gap: 14px; align-items: start }
+.input-panel,.result-panel { padding: 16px 19px }
+.panel-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 12px; justify-content: space-between; margin-bottom: 8px }
+.panel-heading h3 { margin: 0; font-size: 1.28rem }
+.panel-heading p { margin: 0; color: var(--muted); font-size: .84rem; flex-basis: 100% }
+#proposal-form fieldset { display: block; padding-top: 0; margin: 14px 0; border-top: 0 }
+#proposal-form legend { color: #28565a; font-size: .87rem; font-weight: 700; padding: 0 0 6px; width: 100%; border-bottom: 1px solid var(--border); margin-bottom: 9px }
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 12px }
+.field-grid label:has(select) { grid-column: 1 / -1 }
+.field-hint { color: var(--muted); font-size: .83rem; margin: 7px 0 0 }
+#material-properties { margin: 12px 0; padding: 8px 11px; border: 1px solid var(--border); background: var(--panel); border-radius: 6px }
+#material-cards { margin: 10px 0 }
+#material-cards :is(h4,p) { margin: 3px 0 }
+#material-cards p { color: var(--muted); font-size: .85rem }
+#material-cards .material-grid div { background: #e6efef }
+.form-actions,.export-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border) }
+button:not(:disabled):hover { background: #064f52 }
+button.secondary:not(:disabled):hover { background: #e9f3f2 }
+button.secondary { border-color: #9dbebc }
+#export-status { color: var(--muted); font-size: .82rem; flex-basis: 100% }
+#export-status:empty { display: none }
+
+#results > p { color: var(--muted); margin: 10px 0 15px; font-size: .92rem }
+#results .note { color: #653c25; background: #fff5e9; overflow-wrap: anywhere }
+.result-status {
+  color: #2b6155; padding: 3px 7px; border-radius: 4px;
+  background: #e8f3ed; font: 600 .74rem var(--mono);
+}
+.result-status:empty { display: none }
+.result-status[data-status=error] { color: #893221; background: #f9e9e3 }
+.result-metrics { margin: 7px 0; display: grid; gap: 0 }
+.result-metrics div { border-bottom: 1px solid #e4ecea; padding: 8px 0; overflow-wrap: anywhere }
+.result-metrics dt { color: var(--muted); font-size: .88rem }
+.result-metrics dd { margin: 3px 0 0; font: 600 1.1rem/1.2 var(--mono); color: #1a5157 }
+#bitacora { margin-top: 20px }
+#decision-log { display: grid; gap: 10px }
+.decision-card { background: #fff }
+#desarrollo { margin-top: 18px; border: 1px solid var(--border); border-radius: 7px; background: #eaf4f2 }
+#desarrollo > summary { padding: 11px 15px }
+#memory h3 { margin-top: 14px }
+#memory .eq { border-left-color: #499a94; background: #eff6f5 }
+#memory .iteration { border-color: var(--border) }
+#memory h4 { margin: 12px 0 6px }
+#catalogos h2 { margin-top: 4px }
+
+@media(max-width:1080px) {
+  .workbench { grid-template-columns: 170px minmax(0, 1fr); gap: 14px }
+  .module-grid { grid-template-columns: minmax(0, 1fr) minmax(240px, .76fr) }
+}
+@media(max-width:845px) {
+  .masthead-inner,.workbench { padding-inline: 17px }
+  .workbench { grid-template-columns: minmax(0, 1fr) }
+  .module-menu { position: static; display: block }
+  #modules { display: flex; flex-wrap: wrap; gap: 3px 5px }
+  .catalog-link { margin-top: 4px }
+}
+@media(max-width:650px) {
+  .module-grid { grid-template-columns: minmax(0,1fr) }
+  .module-header,.input-panel,.result-panel { padding: 14px }
+  .masthead-inner { padding-block: 16px 20px }
+}
+@media(max-width:420px) {
+  .field-grid { grid-template-columns: minmax(0,1fr) }
+  .module-menu { padding: 9px }
+  .module-link { min-height: 37px; padding: 7px 8px }
+}
