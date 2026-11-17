@@ -1,0 +1,4 @@
+[submodule "componentes"]
+	path = componentes
+	url = https://github.com/cccampos19/prensa-mecanica-web.git
+	branch = diseno-por-componente
