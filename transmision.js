@@ -122,7 +122,7 @@ function finishDesign(c, power, belt, entries, check, {decision,trial}) {
   eq(math`m=\frac{25.4}{P_d}=\frac{25.4}{${n(diametral,5)}}=${mm(module)};\quad p=\pi/P_d=${mm(25.4*pitch)}`);
   eq(math`d_p=N_p m=${c.np}(${n(module,5)})=${mm(pinion)};\quad d_g=N_g m=${c.ng}(${n(module,5)})=${mm(gearDiameter)}`);
   if(Math.abs(pinion-160)>1e-9||Math.abs(gearDiameter-640)>1e-9){
-    note('La geometría propuesta da diámetros primitivos distintos de los 160 y 640 mm del plano de la tarea. Esta corrida dimensiona la nueva geometría.');
+    note('La geometría propuesta da diámetros primitivos distintos de los 160 y 640 mm del plano de la prensa. Esta corrida dimensiona la nueva geometría.');
   }
   eq(math`a=1/P_d=${mm(25.4/diametral)};\quad b=1.25/P_d=${mm(1.25*25.4/diametral)}`);
   eq(math`C=\frac{${n(pinion)}+${n(gearDiameter)}}{2}=${mm((pinion+gearDiameter)/2)}`);

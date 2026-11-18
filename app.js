@@ -376,7 +376,7 @@ function renderOverview(result) {
   if(!result){
     const note=document.createElement('p');
     note.className='note';
-    note.textContent='La propuesta de la tarea está precargada. Calcula el conjunto para ver las dimensiones y comprobaciones.';
+    note.textContent='Calcula la propuesta para ver las dimensiones y comprobaciones del conjunto.';
     overview.append(note);
     return;
   }
@@ -662,7 +662,7 @@ form.addEventListener('input',event=>{
 });
 document.querySelector('#restore').addEventListener('click',()=>{
   for(const [key,value] of Object.entries(defaults)) form.elements.namedItem(key).value=value;
-  markEdited('Datos de la tarea restaurados. Calcula para ver los resultados.');
+  markEdited('Datos iniciales de la prensa cargados. Calcula para ver los resultados.');
 });
 function updateDownloads(){
   const available=!edited&&Boolean(current?.entries.some(entry=>entry.type==='eq'));

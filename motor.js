@@ -63,7 +63,7 @@ function calculate(c) {
     add('heading', 'Datos del enunciado y del plano');
     eq(math`n_m=${display(c.rpm,'rpm')};\quad i_b=${n(c.ratio)};\quad T_s=${display(c.load,'kgf\\,cm')}`);
     add('heading', 'Hipótesis de pérdidas y propuesta de motor');
-    add('text', 'El enunciado escrito especifica un torque de salida. Para el caso de la tarea se supone una transmisión sin pérdidas porque el texto no da eficiencias ni pérdidas. Si editas una eficiencia, se aplica el valor indicado a esa etapa.');
+    add('text', 'El enunciado escrito especifica un torque de salida. Para el caso de la prensa se supone una transmisión sin pérdidas porque el texto no da eficiencias ni pérdidas. Si editas una eficiencia, se aplica el valor indicado a esa etapa.');
     eq(math`\eta_b=${n(c.beltEff/100)};\quad\eta_g=${n(c.gearEff/100)};\quad P_{nom}=${kw(c.nominal*1000)}`);
     add('text', 'Método de clase: relaciones de transmisión y potencia mecánica (apuntes, pp. 28, 30 y 41–42).');
     add('heading', 'Cadena de velocidades');
@@ -155,7 +155,7 @@ function calculate(c) {
     const rollerFits='El diámetro propuesto cumple la referencia geométrica y conserva contacto en el recorrido.';
     add('text',rollerFits);
     trial(rollerDecision,rollerDiameter,'verified',rollerFits);
-    add('text','El texto del enunciado fija 2100 rpm y 18000 kgf·cm para el caso de la tarea. El plano se usa para la geometría y muestra rotulados 1800 rpm y 15000 kgf·cm.');
+    add('text','El texto del enunciado fija 2100 rpm y 18000 kgf·cm para el caso de la prensa. El plano se usa para la geometría y muestra rotulados 1800 rpm y 15000 kgf·cm.');
     const nominal=geometry[50], smallWrap=nominal.wrapMotor, largeWrap=nominal.wrapDriven;
     const length=nominal.length;
     const speed = Math.PI * driver * c.rpm / 60;
