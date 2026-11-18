@@ -5,6 +5,7 @@ const workspace=document.querySelector('#workspace');
 const catalogsView=document.querySelector('#catalogos');
 const form=document.querySelector('#proposal-form');
 const fieldsHost=document.querySelector('#fields');
+const shaftHost=document.querySelector('#shaft-inputs');
 const materialDetails=document.querySelector('#material-properties');
 const materialHost=document.querySelector('#material-cards');
 const resultStatus=document.querySelector('#result-status');
@@ -47,7 +48,8 @@ function example(component) {
 }
 
 function stateFor(key) {
-  if(!states.has(key)) states.set(key,{values:example(components[key]),result:null,runs:[]});
+  if(!states.has(key)) states.set(key,{values:example(components[key]),result:null,runs:[],
+    shaft:key==='flecha'?structuredClone(shaftInputDefaults):undefined});
   return states.get(key);
 }
 
@@ -85,6 +87,40 @@ function renderFields(component, values) {
     return box;
   });
   fieldsHost.replaceChildren(...groups);
+}
+
+function toggleShaftMoment(shaft) {
+  const control=form.elements.namedItem('moment');
+  const fromForces=shaft.mode==='forces';
+  control.disabled=fromForces;
+  control.closest('label').hidden=fromForces;
+}
+
+function renderProposal(component,state) {
+  renderFields(component,state.values);
+  shaftHost.hidden=!state.shaft;
+  shaftHost.replaceChildren();
+  if(!state.shaft) return;
+  const sources=['engranes','banda'].flatMap(key=>(states.get(key)?.runs||[])
+    .filter(({result})=>result.shaftForces&&!result.error)
+    .map(({result})=>({title:components[key].nav+' · corrida '+result.run,...result.shaftForces})));
+  createShaftInputPanel(shaftHost,state.shaft,shaft=>{
+    state.shaft=shaft;
+    toggleShaftMoment(shaft);
+    updateProposal(state);
+  },sources);
+  toggleShaftMoment(state.shaft);
+}
+
+function updateProposal(state) {
+  state.values={...state.values,...inputValues()};
+  if(state.result){
+    state.result=null;
+    exportStatus.textContent='';
+    renderResults(null);
+    renderRunHistory(state);
+  }
+  renderMaterial(components[activeKey],state);
 }
 
 function renderMaterial(component, state) {
@@ -220,7 +256,7 @@ function renderResults(result) {
   worksheetTitle.textContent=result.notebook?result.entries[0].value:
     'Corrida '+result.run+' · '+components[activeKey].title;
   if(result.error){
-    resultStatus.textContent='Revisar datos';
+    resultStatus.textContent=result.nonconvergence?'No convergió':'Revisar datos';
     resultStatus.dataset.status='error';
     resultsHost.append(node('p',plainNumberNotation(result.error),'note'));
   }else{
@@ -251,12 +287,13 @@ function renderRunHistory(state) {
     const button=node('button','Corrida '+run.result.run,'secondary');
     button.type='button';
     button.setAttribute('aria-pressed',String(run.result===state.result));
-    button.append(node('small',run.result.error?'Revisar datos':runSummary(run.result)));
+    button.append(node('small',run.result.nonconvergence?'No convergió':run.result.error?'Revisar datos':runSummary(run.result)));
     button.addEventListener('click',()=>{
       state.values={...run.values};
+      if(run.shaft) state.shaft=structuredClone(run.shaft);
       state.result=run.result;
       exportStatus.textContent='';
-      renderFields(components[activeKey],state.values);
+      renderProposal(components[activeKey],state);
       renderMaterial(components[activeKey],state);
       renderResults(state.result);
       renderRunHistory(state);
@@ -310,7 +347,7 @@ function openModule() {
   document.querySelector('#module-description').textContent=component.description;
   exportStatus.textContent='';
   materialDetails.open=false;
-  renderFields(component,state.values);
+  renderProposal(component,state);
   renderMaterial(component,state);
   renderResults(state.result);
   renderRunHistory(state);
@@ -331,21 +368,14 @@ document.querySelector('.skip').addEventListener('click',event=>{
 window.addEventListener('hashchange',openModule);
 window.addEventListener('DOMContentLoaded',openModule);
 
-form.addEventListener('input',()=>{
-  const state=stateFor(activeKey);
-  state.values=inputValues();
-  if(state.result){
-    state.result=null;
-    exportStatus.textContent='';
-    renderResults(null);
-    renderRunHistory(state);
-  }
-  renderMaterial(components[activeKey],state);
+form.addEventListener('input',event=>{
+  if(!shaftHost.contains(event.target)) updateProposal(stateFor(activeKey));
 });
 
 document.querySelector('#reset').addEventListener('click',()=>{
   const state=stateFor(activeKey);
   state.values=example(components[activeKey]);
+  if(state.shaft) state.shaft=structuredClone(shaftInputDefaults);
   state.result=null;
   openModule();
 });
@@ -354,10 +384,14 @@ form.addEventListener('submit',event=>{
   event.preventDefault();
   const component=components[activeKey];
   const state=stateFor(activeKey);
-  state.values=inputValues();
+  state.values={...state.values,...inputValues()};
   if(!state.result||state.result.notebook){
-    state.result={...calculateComponent(component,numericValues(state.values)),run:state.runs.length+1};
-    state.runs.push({values:{...state.values},result:state.result});
+    const values=numericValues(inputValues());
+    const shaft=state.shaft?structuredClone(state.shaft):undefined;
+    const inputs=shaft?{...numericValues({length:shaft.length,supportA:shaft.supportA,supportB:shaft.supportB}),
+      mode:shaft.mode,loads:shaft.loads.map(({x,fy,fz,...origin})=>({...origin,...numericValues({x,fy,fz})}))}:undefined;
+    state.result={...calculateComponent(component,values,inputs),run:state.runs.length+1};
+    state.runs.push({values:{...state.values},shaft,result:state.result});
   }
   exportStatus.textContent='';
   renderMaterial(component,state);

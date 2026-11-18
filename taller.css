@@ -236,3 +236,22 @@ button.secondary { border-color: #9dbebc }
   .worksheet-class .worksheet-step:has(> .iteration + .iteration) > h4 { grid-column: 1 / -1 }
   .worksheet-class .worksheet-step:has(> .iteration + .iteration) > .iteration { margin: 0 }
 }
+
+.shaft-mode-buttons,.shaft-load-list-heading { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center }
+.shaft-mode-buttons [aria-pressed=true] { color:white; background:#185961 }
+.shaft-position-fields,.shaft-load-row { display:grid; gap:8px; grid-template-columns:repeat(3,minmax(0,1fr)) }
+.shaft-load-list-heading { justify-content:space-between; margin:1rem 0 .4rem }
+.shaft-load-list-heading h4 { margin:0 }
+.shaft-load-row { padding:.6rem 0; border-top:1px solid var(--border); align-items:end }
+.shaft-load-row strong { grid-column:1 / 3; grid-row:1; font-size:.88rem }
+.shaft-load-row button { grid-row:1;grid-column:3;justify-self:end;min-height:28px }
+.shaft-live-plots { display:grid; gap:8px; margin:.7rem 0 }
+.shaft-live-plots figure { margin:0; padding:8px 10px; border:1px solid var(--border); border-radius:5px; background:#f7fbfa }
+.shaft-live-plots strong,.shaft-live-plots figcaption { font-size:.8rem }
+.shaft-live-plots canvas { display:block; width:100%; height:auto }
+.shaft-import { margin-top:12px; padding:10px; border:1px solid var(--border);border-radius:5px }
+.shaft-import summary { cursor:pointer; font-weight:700 }
+.shaft-import label { margin:.5rem 0 }
+@media(max-width:480px){.shaft-position-fields{grid-template-columns:1fr 1fr}.shaft-position-fields label:first-child{grid-column:1/-1}}
+.shaft-import .shaft-replace { display:flex; gap:8px; align-items:center; font-weight:500 }
+.shaft-replace input { width:16px; min-height:16px; height:16px }

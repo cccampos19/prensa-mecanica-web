@@ -34,13 +34,17 @@ function worksheetNumber(value, unit, digits=3) {
   return plainNumberNotation(number(value,digits))+(unit?' '+unit:'');
 }
 
-function arrangeWorksheet(component, values, work, metrics, error) {
-  const rows=component.groups.flatMap(([,fields])=>fields.map(([key,label,,options])=>{
+function arrangeWorksheet(component, values, work, metrics, error, shaftInputs) {
+  const fromForces=shaftInputs?.mode==='forces';
+  const rows=component.groups.flatMap(([,fields])=>fields.filter(([key])=>!fromForces||key!=='moment').map(([key,label,,options])=>{
     if(!Number.isFinite(values[key])) return [label,'Dato inválido'];
     if(!options) return [label,worksheetNumber(values[key],'',6)];
     const title=options.find((choice,i)=>values[key]===(Array.isArray(choice)?choice[0]:i));
     return [label,Array.isArray(title)?title[1]:title??'Selección inválida'];
   }));
+  if(component===components.flecha){
+    rows.unshift(['Modo de entrada',fromForces?'Fuerzas y apoyos':'Momento y torque']);
+  }
   const entries=[
     {type:'section',value:component.title},
     {type:'heading',value:'Datos y propuesta'},
@@ -59,18 +63,35 @@ function arrangeWorksheet(component, values, work, metrics, error) {
   return entries;
 }
 
-function calculateComponent(component, values) {
+function calculateComponent(component, values, shaftInputs) {
   const trace=createCalculationTrace();
   const {entries,decisions,check}=trace;
   try {
     check(Object.values(values).every(Number.isFinite),'Todos los datos deben ser números finitos.');
-    const result=component.solve(values,trace);
+    const result=component.solve(values,trace,shaftInputs);
     check(result.metrics.every(([,value])=>Number.isFinite(value)),'Los resultados exceden el rango numérico del modelo.');
-    return {...result,entries:arrangeWorksheet(component,values,entries,result.metrics),decisions};
+    return {...result,entries:arrangeWorksheet(component,values,entries,result.metrics,null,shaftInputs),decisions};
   } catch(error) {
     if(error.name!=='Error') throw error;
-    return {entries:arrangeWorksheet(component,values,entries,[],error.message),decisions,metrics:[],error:error.message};
+    return {entries:arrangeWorksheet(component,values,entries,[],error.message,shaftInputs),
+      decisions,metrics:[],error:error.message,nonconvergence:error.code==='SHAFT_NO_CONVERGENCE'};
   }
+}
+
+const shaftSeeds=referenceTables[3].rows.map(([d])=>[d,d+' mm']);
+const shaftShoulders=[
+  {label:'Hombro de la p. 21 · D/d = 1.5, r/d = 0.10',fillet:.1,ktFlex:1.6,ktTors:1.4},
+  {label:'Hombro de la p. 20 · D/d = 1.5, r/d = 0.01/1.1',fillet:.01/1.1,ktFlex:1.7,ktTors:1.4}
+];
+function solveIndependentShaft(values, trace, inputs) {
+  trace.check(shaftSeeds.some(([d])=>d===values.shaftStart),'Selecciona el diámetro inicial de la tabla 11-2.');
+  const shoulder=shaftShoulders[values.shoulder];
+  trace.check(shoulder,'Elige una geometría de hombro de la libreta.');
+  values={...values,...shoulder};
+  if(inputs?.mode!=='forces') return solveComponentShaft(values,trace);
+  const beam=solveShaftPointLoads(inputs,trace);
+  const result=solveComponentShaft({...values,moment:beam.maximum},trace);
+  return {...result,metrics:[...result.metrics,...beam.metrics]};
 }
 
 const steelOptions=steels.map(steel=>steel.label);
@@ -119,20 +140,20 @@ const components={
   },
   flecha:{
     title:'Dimensionamiento de flecha',nav:'Flecha',type:'Ejes y apoyos',
-    description:'Calcula el diámetro de una sección circular con flexión alternante y torsión constante. Ingresa directamente el momento y el torque de la sección crítica.',
-    solve:solveComponentShaft,materialStage:5,sketch:true,
+    description:'Diseña una flecha circular maciza. Plantea las fuerzas y apoyos o captura el momento y el torque. Elige un acero de catálogo para iterar el diámetro por fatiga y fluencia.',
+    solve:solveIndependentShaft,materialStage:5,sketch:true,
     groups:[
-      ['Cargas y sección',[
-        ['moment','Momento flector alternante (N·m)',200],['torque','Torque constante (N·m)',100],
-        ['shaftStart','Diámetro inicial (mm)',30],['fillet','Relación de radio de filete r/d',.1]
-      ]],
       ['Material y acabado',[
         ['shaftSteel','Acero · tablas A-20 y A-21',33,steelOptions],
         ['shaftFinish','Acabado · tabla 6-2',1,finishOptions]
       ]],
+      ['Cargas y sección',[
+        ['moment','Momento flector alternante (N·m)',200],['torque','Torque constante (N·m)',100],
+        ['shaftStart','Diámetro inicial · agujero de tabla 11-2',30,shaftSeeds],
+        ['shoulder','Geometría y concentradores · libreta',0,shaftShoulders.map(s=>s.label+' · Kt '+s.ktFlex+', Kts '+s.ktTors)]
+      ],'El agujero tabulado sirve como propuesta inicial. El resultado es el diámetro continuo que cumple los objetivos.'],
       ['Factores de diseño',[
         ['kc','Factor de carga · apuntes, p. 9',1,shaftLoadFactors.map(item=>[item.value,item.label])],
-        ['ktFlex','Concentración en flexión Kt',1.7],['ktTors','Concentración en torsión Kts',1.4],
         ['shaftFat','Índice mínimo de Hencky–Marin',2],['shaftStatic','Factor estático mínimo',2],
         ...environmentFields
       ]]

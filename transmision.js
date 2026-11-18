@@ -490,7 +490,7 @@ function solveComponentGears(c,ctx){
       ['label',329,50,'Entre centros '+number(result.centerDistance,2)+' mm']
     ]
   });
-  return {metrics:[
+  return {shaftForces:{names:['Tangencial del piñón','Radial del piñón'],forces:[result.wt,result.wr],angle:90}, metrics:[
     ['Ancho de cara',result.faceMm,'mm',3],
     ['Módulo',result.module,'mm',3],
     ['Distancia entre centros',result.centerDistance,'mm',3],
@@ -535,17 +535,25 @@ function solveComponentShaft(c,ctx){
 
   add('heading','Iteración por fatiga y selección del diámetro continuo');
   const log=decision(5,'Diámetro de la sección crítica','mm',shaft.label+'. El diámetro continuo se verifica con las cargas dadas y el intervalo del factor de tamaño.');
+  function noConvergence(reason){
+    throw Object.assign(new Error('No convergió con '+shaft.label+'. '+reason+' Elige otro acero de las tablas y vuelve a calcular.'),{code:'SHAFT_NO_CONVERGENCE'});
+  }
   const diameter=iterate(c.shaftStart,'diámetro de la flecha (mm)',d=>{
     eq(math`d=${mm(d)};\quad r=(${n(c.fillet)})(${n(d,5)})=${mm(c.fillet*d)}`);
-    const {kf,kfs,se}=shaftStress(c,shaft,{d,M,T,kd,ke},sizing);
+    const {kf,kfs,se,nf}=shaftStress(c,shaft,{d,M,T,kd,ke},sizing);
+    const ns=shaft.sy/(elasticEquivalent/d**3);
+    const passes=nf>=c.shaftFat*(1-1e-8)&&ns>=c.shaftStatic*(1-1e-8);
+    trial(log,d,passes?'viable':'rejected','Hencky–Marin '+n(nf,5)+' (mínimo '+n(c.shaftFat)+'). Fluencia '+n(ns,5)+' (mínimo '+n(c.shaftStatic)+').');
     const fatigueDiameter=Math.cbrt(32*Math.sqrt(c.shaftFat)/Math.PI*Math.hypot(kf*M/se,Math.sqrt(.75)*kfs*T/shaft.sut));
     eq(math`d_{\mathrm{fat}}=\left[\frac{32\sqrt{n_{\mathrm{fat,obj}}}}{\pi}\sqrt{\left(\frac{K_f M_a}{S_e}\right)^2+\tfrac34\left(\frac{K_{fs}T_m}{S_{ut}}\right)^2}\right]^{1/3}`);
     eq(math`d_{\mathrm{fat}}=\left[\frac{32\sqrt{${n(c.shaftFat)}}}{\pi}\sqrt{\left(\frac{${n(kf,5)}(${n(M)})}{${n(se,4)}}\right)^2+\tfrac34\left(\frac{${n(kfs,5)}(${n(T)})}{${n(shaft.sut)}}\right)^2}\right]^{1/3}=${mm(fatigueDiameter)}`);
     const next=Math.max(dMin,staticDiameter,fatigueDiameter);
     eq(math`d_{\mathrm{req}}=\max(${n(dMin)},${n(staticDiameter,5)},${n(fatigueDiameter,5)})=${mm(next)}`);
+    if(d===dMax && !passes) noConvergence('El extremo de '+dMax+' mm del factor de tamaño queda por debajo del objetivo de seguridad.');
     if(next>dMax) text('Se verifica el extremo superior del intervalo del factor de tamaño.');
     return Math.min(dMax,next);
-  },false,0.000001);
+  },true,0.000001);
+  if(diameter===null) noConvergence('La iteración del diámetro salió del intervalo numérico o agotó los 100 pasos.');
 
   add('heading','Comprobación de fatiga y fluencia');
   const {a,m,nf,se,kf,kfs}=shaftStress(c,shaft,{d:diameter,M,T,kd,ke},sizing);
@@ -558,7 +566,7 @@ function solveComponentShaft(c,ctx){
   const qualifies=nf>=c.shaftFat*(1-1e-8)&&staticFactor>=c.shaftStatic*(1-1e-8);
   trial(log,diameter,qualifies?'calculated':'rejected',
     'Índice de fatiga '+n(nf,4)+' frente a '+n(c.shaftFat)+' requerido. Factor de fluencia '+n(staticFactor,4)+' frente a '+n(c.shaftStatic)+' requerido.');
-  check(qualifies,'El diámetro evaluado de '+n(diameter,3)+' mm queda por debajo de los objetivos de seguridad de la sección.');
+  if(!qualifies) noConvergence('El diámetro evaluado de '+n(diameter,3)+' mm queda por debajo de los objetivos de seguridad de la sección.');
   let governing='la comprobación a fatiga';
   if(diameter===dMin) governing='el límite inferior del factor de tamaño';
   else if(diameter===staticDiameter) governing=nf<=c.shaftFat*(1+1e-6)?'la fatiga y la fluencia':'la comprobación por fluencia';
@@ -579,7 +587,7 @@ function solveComponentShaft(c,ctx){
     ]
   });
   return {metrics:[
-    ['Diámetro calculado',diameter,'mm',3],
+    ['Diámetro continuo calculado',diameter,'mm',5],
     ['Diámetro por fluencia',staticDiameter,'mm',3],
     ['Índice de Hencky–Marin',nf,'',4],
     ['Factor de fluencia',staticFactor,'',4],

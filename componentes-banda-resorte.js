@@ -131,7 +131,7 @@ function solveComponentBelt(c,{add,check,decision,trial}){
     ['label',320,112,'Conducida '+n(c.drivenMm,2)+' mm'],
     ['label',210,11,'Entre centros '+n(c.centersMm,2)+' mm · ancho '+n(width*1000,2)+' mm']);
   add('diagram',{title:'Banda abierta de dos poleas',caption:'Radios y centros a la misma escala. Los segmentos representan las tangentes exteriores.',marks});
-  return {belt:{selected:width,review:{fixedWidth:fixedWidth!==null,operatingFpm:speedFpm}},
+  return {shaftForces:{names:['Ramal tenso','Ramal flojo'],forces:[tight,slack],angle:2*Math.abs(alpha)*180/Math.PI},belt:{selected:width,review:{fixedWidth:fixedWidth!==null,operatingFpm:speedFpm}},
     metrics:[[fixedWidth===null?'Ancho mínimo continuo':'Ancho de tabla',width*1000,'mm',3],
     ['Longitud de banda',length,'m',3],['Velocidad de banda',speed,'m/s',2],
     ['Velocidad de salida',drivenRpm,'rpm',2],['Tensión del ramal tenso',tight,'N',2],
