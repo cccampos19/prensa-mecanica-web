@@ -93,7 +93,7 @@ function calculateNotebookShaft() {
     add('diagram',{title,caption,marks});
   }
 
-  add('section','Ejercicio de la libreta · Flecha escalonada');
+  add('section','Caso resuelto · Flecha escalonada');
   heading('Enunciado y cargas');
   text('Páginas 20–22 de la libreta de Diseño de Elementos de Máquinas. Primero se comprueba el hombro de la flecha de acero AISI 1050 CD. Después se busca un diámetro en AISI 1020 HR con las mismas cargas y un índice objetivo de Hencky–Marin de 1.35.');
   eq(math`M_a=${display(loading.M,'lbf\\,in')};\quad T_m=${display(loading.T,'lbf\\,in')};\quad M_m=0;\quad T_a=0`);

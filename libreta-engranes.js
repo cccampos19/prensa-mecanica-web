@@ -24,7 +24,7 @@ function calculateNotebookGears() {
     {pd:3, pinion:14, gear:56, lewis:.277}
   ];
 
-  add('section','Ejercicio de la libreta · Engranes rectos');
+  add('section','Caso resuelto · Engranes rectos');
   heading('Enunciado y datos');
   text('Transmitir 100 hp a 1120 rpm con relación 4 a 1. Se proponen dos juegos de dientes de altura completa, con ángulo de presión de 20° y acero AISI 1040 CD. La libreta da el factor Lewis para el piñón en ambas corridas. Las comprobaciones de ancho y fatiga corresponden al piñón.');
   text('Los datos provienen de la libreta de Diseño de Elementos de Máquinas, pp. 37–39, y de las tablas aportadas A-20 y 6-2. Se usan los valores tabulados con su precisión original y la conversión 746 W/hp del ejercicio.');

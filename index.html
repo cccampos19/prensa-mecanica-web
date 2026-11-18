@@ -4,47 +4,63 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#102b39">
-  <title>Diseño de elementos de máquinas · Por componente</title>
+  <title>Solucionador de elementos de máquinas</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
   <link rel="stylesheet" href="interfaz.css">
-  <link rel="stylesheet" href="taller.css?v=flecha3">
+  <link rel="stylesheet" href="taller.css?v=problemas1">
 </head>
 <body>
 <a class="skip" href="#contenido">Ir al contenido</a>
 <header class="masthead">
   <div class="masthead-inner">
     <div>
-      <p class="project-name">Diseño de elementos de máquinas</p>
-      <h1>Diseño por componente</h1>
-      <p>Plantea una corrida y sigue el desarrollo con tus datos.</p>
+      <h1><a href="#inicio">Solucionador de elementos de máquinas</a></h1>
+      <p>Diseña con tus cargas, materiales de catálogo y criterios de seguridad.</p>
     </div>
-    <a class="original-link" href="https://cccampos19.github.io/prensa-mecanica-web/">Caso de la prensa <span aria-hidden="true">↗</span></a>
+    <button class="load-problem" type="button" id="open-loader" aria-haspopup="dialog">Cargar problema</button>
   </div>
 </header>
-<div class="workbench">
+<dialog id="problem-loader" aria-labelledby="load-title">
+  <form method="dialog" id="problem-picker">
+    <h2 id="load-title">Cargar problema</h2>
+    <label>Problema disponible<select id="problem-choice"></select></label>
+    <p id="load-hint" class="field-hint"></p>
+    <div class="form-actions">
+      <button type="submit" id="apply-problem">Cargar datos</button>
+      <button type="button" class="secondary" id="close-loader">Cancelar</button>
+    </div>
+  </form>
+  <a class="system-case" href="https://cccampos19.github.io/prensa-mecanica-web/" target="_blank" rel="noopener">Abrir la prensa mecánica&nbsp;↗</a>
+</dialog>
+<div class="workbench solver-home">
   <aside class="module-menu" aria-label="Calculadoras disponibles">
     <h2>Componentes</h2>
     <nav id="modules" aria-label="Elegir componente"></nav>
     <a class="catalog-link" data-module="catalogos" href="#catalogos">Catálogos de referencia</a>
   </aside>
   <main id="contenido" tabindex="-1">
+    <section id="inicio" aria-labelledby="home-title">
+      <header class="home-heading">
+        <h2 id="home-title">Elige qué quieres diseñar</h2>
+        <a href="#catalogos">Consultar catálogos</a>
+      </header>
+      <nav class="component-grid" id="component-grid" aria-label="Abrir un componente"></nav>
+    </section>
     <section id="catalogos" aria-labelledby="catalog-title" hidden>
       <h2 id="catalog-title">Catálogos de referencia</h2>
       <div id="catalog-tables"></div>
     </section>
-    <section id="workspace" aria-labelledby="module-title">
+    <section id="workspace" aria-labelledby="module-title" hidden>
       <header class="module-header">
         <p id="module-type"></p>
         <h2 id="module-title"></h2>
         <p id="module-description"></p>
-        <button type="button" class="secondary" id="notebook-example" hidden>Ver ejercicio de la libreta</button>
       </header>
       <div class="module-grid">
         <section class="input-panel" aria-labelledby="input-title">
           <header class="panel-heading">
             <h3 id="input-title" tabindex="-1">Datos de entrada</h3>
-            <p>El formulario está precargado con un ejemplo editable.</p>
           </header>
           <form id="proposal-form">
             <div id="shaft-inputs" hidden></div>
@@ -55,7 +71,7 @@
             </details>
             <div class="form-actions">
               <button type="submit">Calcular</button>
-              <button type="button" class="secondary" id="reset">Restaurar ejemplo</button>
+              <button type="button" class="secondary" id="reset">Restablecer datos</button>
             </div>
           </form>
         </section>
@@ -110,13 +126,13 @@
 <script src="flecha-formulario.js"></script>
 <script src="materiales.js"></script>
 <script src="componentes.js?v=flecha3"></script>
-<script src="libreta-engranes.js?v=libreta1"></script>
-<script src="libreta-flecha.js?v=libreta2"></script>
-<script src="libreta-potencia-banda.js?v=libreta2"></script>
-<script src="libreta-apoyos.js?v=libreta2"></script>
-<script src="libreta-resorte.js?v=libreta2"></script>
+<script src="libreta-engranes.js?v=problemas1"></script>
+<script src="libreta-flecha.js?v=problemas1"></script>
+<script src="libreta-potencia-banda.js?v=problemas1"></script>
+<script src="libreta-apoyos.js?v=problemas1"></script>
+<script src="libreta-resorte.js?v=problemas1"></script>
 <script src="memoria.js?v=libreta2"></script>
 <script src="memoria-pdf.js?v=libreta1"></script>
-<script src="app.js?v=flecha3"></script>
+<script src="app.js?v=problemas1"></script>
 </body>
 </html>

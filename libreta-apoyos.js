@@ -10,7 +10,7 @@ function calculateNotebookBalance(){
   const L=500, xD=325, F=9;
   const left=F*(L-xD)/L, right=F-left;
   const stations=[['E',20],['C',200],['D',xD],['F',480]];
-  add('section','Ejercicio de la libreta · Reacciones y momentos');
+  add('section','Caso resuelto · Reacciones y momentos');
   add('heading','Enunciado y croquis');
   add('text','Página 14 de la libreta. Una flecha apoyada en A y B recibe 9 kN hacia abajo en D. Se calcula el equilibrio y se determinan los momentos en los cambios de sección y en el punto de carga.');
   eq(math`L=${mm(L)};\quad x_D=${mm(xD)};\quad DB=${mm(L-xD)};\quad F=${load(F)}`);
@@ -98,7 +98,7 @@ function calculateNotebookBearings(){
     eq(math`C_{10,\mathrm{req}}=F_e L_{10}^{1/3}=${n(Fe,5)}(${n(life)})^{1/3}=${kn(required)}`);
     return Fe;
   };
-  add('section','Ejercicio de la libreta · Rodamientos');
+  add('section','Caso resuelto · Rodamientos');
   add('heading','Datos y croquis');
   add('text','Páginas 58–60. Se elige el rodamiento izquierdo para 350 horas a 8000 rpm. Se usan las columnas de contacto angular, serie 02, que corresponden a las capacidades anotadas en el ejercicio. El aro interior gira.');
   eq(math`F_r=\frac{175(9.80665)}{1000}=${kn(Fr)};\quad F_a=\frac{75(9.80665)}{1000}=${kn(Fa)};\quad V=${V}`);

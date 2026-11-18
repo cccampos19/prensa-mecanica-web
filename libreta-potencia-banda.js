@@ -42,7 +42,7 @@ function calculateNotebookBelt() {
   const shaftSpeed=2*Math.PI*rpm/60;
   const work=550*power, torque=work/shaftSpeed;
 
-  add('section','Ejercicio de la libreta · Banda plana');
+  add('section','Caso resuelto · Banda plana');
   add('heading','Enunciado y datos');
   add('text','Dimensionar una banda plana para transmitir 30 hp a 4500 rpm. La relación es 5 a 1 y la distancia entre centros es de 1.8 m. Las páginas 45 y 47 proponen poliamida A-2 y F-1, respectivamente.');
   eq(math`H=${dim(power,'hp')};\quad n_m=${dim(rpm,'rpm')};\quad i=${ratio};\quad C=\frac{${centersM}}{0.0254}=${dim(centersIn,'in',5)}`);
@@ -133,7 +133,7 @@ function calculateNotebookPower() {
   const torque=12*work/angularSpeed, power=work/550;
   const centrifugal=notebookCentrifugalPerWidth(material,speed)*width;
 
-  add('section','Ejercicio de la libreta · Potencia de una banda');
+  add('section','Caso resuelto · Potencia de una banda');
   add('heading','Enunciado y datos de la p. 44');
   add('text','Una banda poliamida A-3 de 6 in de ancho trabaja a plena carga. Las poleas miden 6 y 18 in, con 8 ft entre sus centros. La motriz gira a 1750 rpm. Se buscan las tensiones, el torque, la potencia y la fuerza centrífuga.');
   eq(math`b=${dim(width,'in')};\quad d=${dim(d,'in')};\quad D=${dim(D,'in')};\quad C=(${centersFt})(12)=${dim(centersIn,'in')};\quad n_m=${dim(rpm,'rpm')}`);

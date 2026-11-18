@@ -16,7 +16,7 @@ function calculateNotebookSpring() {
   const stiffness=fmax/deflectionLimit;
   const safetyAt=d=>shearYieldRatio*wire.A*d**(2-wire.m)/stressConstant;
 
-  add('section','Ejercicio de la libreta · Resorte de compresión');
+  add('section','Caso resuelto · Resorte de compresión');
   heading('Enunciado y datos');
   text('Diseñar un resorte de compresión que trabaje de 120 a 400 N con una deformación máxima de 12 mm. La p. 52 mide la deformación máxima desde la posición libre y usa la fuerza máxima para calcular la rigidez.');
   add('data',{headers:['Dato','Valor usado'],rows:[

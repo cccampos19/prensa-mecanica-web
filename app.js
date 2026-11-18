@@ -17,7 +17,9 @@ const worksheetTitle=document.querySelector('#worksheet-title');
 const memoryHost=document.querySelector('#memory');
 const historyHost=document.querySelector('#run-history');
 const runList=document.querySelector('#run-list');
-const notebookButton=document.querySelector('#notebook-example');
+const home=document.querySelector('#inicio');
+const loader=document.querySelector('#problem-loader');
+const problemChoice=document.querySelector('#problem-choice');
 const texButton=document.querySelector('#download');
 const pdfButton=document.querySelector('#download-pdf');
 const includeRunsOption=document.querySelector('#include-runs-option');
@@ -31,6 +33,15 @@ const notebookExercises={
   rodamientos:calculateNotebookBearings,
   resorte:calculateNotebookSpring,
   potencia:calculateNotebookPower
+};
+const moduleCases={
+  engranes:['Calcular el ancho de cara y verificar los dientes.','Transmisión de engranes de 100 hp'],
+  banda:['Calcular el ancho y la tensión de los ramales.','Selección de una banda plana'],
+  flecha:['Calcular el diámetro por fatiga y fluencia.','Rediseño de una flecha escalonada'],
+  equilibrio:['Obtener reacciones, cortantes y momentos.','Flecha con carga puntual'],
+  rodamientos:['Seleccionar un rodamiento por carga y vida.','Rodamiento con cargas radial y axial'],
+  resorte:['Dimensionar el alambre y comprobar los ganchos.','Resorte de compresión'],
+  potencia:['Relacionar torque, velocidad y potencia.','Potencia transmitida por una banda']
 };
 const states=new Map();
 let activeKey='engranes';
@@ -260,7 +271,7 @@ function renderResults(result) {
     resultStatus.dataset.status='error';
     resultsHost.append(node('p',plainNumberNotation(result.error),'note'));
   }else{
-    resultStatus.textContent=result.notebook?'Ejercicio de la libreta':'Calculado';
+    resultStatus.textContent=result.notebook?'Caso resuelto':'Calculado';
     const list=node('dl',null,'result-metrics');
     for(const [title,value,unit,digits=3] of result.metrics){
       const item=node('div');
@@ -330,9 +341,11 @@ function renderCatalogs() {
 
 function openModule() {
   const hash=location.hash.slice(1);
-  const requested=hash==='catalogos'||Object.hasOwn(components,hash)?hash:'engranes';
+  const requested=hash==='catalogos'||Object.hasOwn(components,hash)?hash:'inicio';
   catalogsView.hidden=requested!=='catalogos';
-  workspace.hidden=requested==='catalogos';
+  home.hidden=requested!=='inicio';
+  document.querySelector('.workbench').classList.toggle('solver-home',!home.hidden);
+  workspace.hidden=!home.hidden||requested==='catalogos';
   for(const link of document.querySelectorAll('[data-module]')){
     if(link.dataset.module===requested) link.setAttribute('aria-current','page');
     else link.removeAttribute('aria-current');
@@ -341,7 +354,6 @@ function openModule() {
   activeKey=requested;
   const component=components[activeKey];
   const state=stateFor(activeKey);
-  notebookButton.hidden=!notebookExercises[activeKey];
   document.querySelector('#module-type').textContent=component.type;
   document.querySelector('#module-title').textContent=component.title;
   document.querySelector('#module-description').textContent=component.description;
@@ -353,12 +365,23 @@ function openModule() {
   renderRunHistory(state);
 }
 
+const editableCases=node('optgroup'), solvedCases=node('optgroup');
+editableCases.label='Problemas editables';
+solvedCases.label='Casos resueltos';
 for(const [key,component] of Object.entries(components)){
   const link=node('a',component.nav,'module-link');
   link.href='#'+key;
   link.dataset.module=key;
   moduleNav.append(link);
+  const [description,caseName]=moduleCases[key];
+  const card=node('a');
+  card.href='#'+key;
+  card.append(node('strong',component.title),node('span',description));
+  document.querySelector('#component-grid').append(card);
+  editableCases.append(new Option(component.title,'edit/'+key));
+  solvedCases.append(new Option(caseName,'case/'+key));
 }
+problemChoice.append(editableCases,solvedCases);
 renderCatalogs();
 
 document.querySelector('.skip').addEventListener('click',event=>{
@@ -372,11 +395,14 @@ form.addEventListener('input',event=>{
   if(!shaftHost.contains(event.target)) updateProposal(stateFor(activeKey));
 });
 
-document.querySelector('#reset').addEventListener('click',()=>{
-  const state=stateFor(activeKey);
-  state.values=example(components[activeKey]);
+function resetProblem(key){
+  const state=stateFor(key);
+  state.values=example(components[key]);
   if(state.shaft) state.shaft=structuredClone(shaftInputDefaults);
   state.result=null;
+}
+document.querySelector('#reset').addEventListener('click',()=>{
+  resetProblem(activeKey);
   openModule();
 });
 
@@ -400,15 +426,39 @@ form.addEventListener('submit',event=>{
   showWorksheet();
 });
 
-notebookButton.addEventListener('click',()=>{
-  const exercise=notebookExercises[activeKey];
-  if(!exercise) return;
-  const state=stateFor(activeKey);
-  state.result={...exercise(),notebook:true};
-  exportStatus.textContent='';
-  renderResults(state.result);
-  renderRunHistory(state);
-  showWorksheet();
+function describeProblem(){
+  const editable=problemChoice.value.startsWith('edit/');
+  document.querySelector('#load-hint').textContent=editable
+    ?'Carga los valores iniciales en el formulario. Podrás editarlos y conservarás tus corridas anteriores.'
+    :'Abre la memoria de este caso con sus datos, ecuaciones y diagramas.';
+  document.querySelector('#apply-problem').textContent=editable?'Cargar datos':'Ver resolución';
+}
+document.querySelector('#open-loader').addEventListener('click',()=>{
+  problemChoice.value='edit/'+(workspace.hidden?'engranes':activeKey);
+  describeProblem();
+  loader.showModal();
+  problemChoice.focus();
+});
+document.querySelector('#close-loader').addEventListener('click',()=>loader.close());
+problemChoice.addEventListener('change',describeProblem);
+document.querySelector('#problem-picker').addEventListener('submit',event=>{
+  event.preventDefault();
+  const [mode,key]=problemChoice.value.split('/');
+  const solved=mode==='case';
+  if(solved) stateFor(key).result={...notebookExercises[key](),notebook:true};
+  else resetProblem(key);
+  loader.close();
+  const focusProblem=()=>{
+    if(solved) showWorksheet();
+    else document.querySelector('#input-title').focus();
+  };
+  if(location.hash==='#'+key){
+    openModule();
+    focusProblem();
+  }else{
+    window.addEventListener('hashchange',focusProblem,{once:true});
+    location.hash=key;
+  }
 });
 
 document.querySelector('#result-jump').addEventListener('click',()=>document.querySelector('#result-title').focus());
